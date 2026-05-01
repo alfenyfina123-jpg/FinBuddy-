@@ -158,7 +158,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[50] md:hidden"
+            className="fixed inset-0 bg-white/30 backdrop-blur-[100px] z-[50] md:hidden"
           />
         )}
       </AnimatePresence>
@@ -496,11 +496,29 @@ function LoginView() {
 
           <button 
             type="button"
-            onClick={loginWithGoogle}
-            className="w-full py-4 sm:py-5 bg-white border-2 border-slate-50 rounded-[1.25rem] md:rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-[11px] text-slate-600 hover:bg-slate-50 hover:border-slate-100 transition-all active:scale-[0.98] flex items-center justify-center gap-3 cursor-pointer"
+            onClick={async () => {
+              try {
+                setLoading(true);
+                setError(null);
+                await loginWithGoogle();
+              } catch (err: any) {
+                console.error(err);
+                if (err.code === 'auth/popup-blocked') {
+                  setError('Popup diblokir! Harap izinkan popup di browser Anda untuk login via Google.');
+                } else if (err.code === 'auth/unauthorized-domain') {
+                  setError('Domain ini belum diizinkan di Firebase Console. Harap tambahkan domain deploy Anda ke Authorized Domains di setelan Firebase Authentication.');
+                } else {
+                  setError('Gagal login via Google. Silakan coba lagi atau gunakan email.');
+                }
+              } finally {
+                setLoading(false);
+              }
+            }}
+            disabled={loading}
+            className="w-full py-4 sm:py-5 bg-white border-2 border-slate-50 rounded-[1.25rem] md:rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-[11px] text-slate-600 hover:bg-slate-50 hover:border-slate-100 transition-all active:scale-[0.98] flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
           >
             <Chrome className="w-4 h-4 text-indigo-500" />
-            Lanjutkan via Google
+            {loading ? 'Menghubungkan...' : 'Lanjutkan via Google'}
           </button>
 
           <p className="mt-10 md:mt-12 text-center text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">

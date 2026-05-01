@@ -11,6 +11,7 @@ export interface Transaction {
   paymentMethod?: 'cash' | 'qris' | 'credit';
   date: string; // ISO yyyy-mm-dd
   productName?: string;
+  invoiceNo?: string;
   hpp?: number;
   createdAt: any; // Firestore Timestamp
 }
@@ -21,6 +22,8 @@ export interface UserProfile {
   displayName: string;
   businessName?: string;
   directorName?: string;
+  address?: string;
+  npwp?: string;
   qrisPayload?: string;
   autoGeneratePdfLedger?: boolean;
   thermalPrinterOptimization?: boolean;

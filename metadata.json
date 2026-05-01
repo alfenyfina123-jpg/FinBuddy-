@@ -1,6 +1,6 @@
 {
   "name": "FinBuddy",
   "description": "A comprehensive business management tool for MSMEs featuring transaction tracking, margin analysis, tax calculations, and smart financial alerts.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": []
 }
