@@ -193,8 +193,8 @@ export default function App() {
         <nav className="flex-1 min-h-0 flex flex-col gap-6 md:gap-10 overflow-y-auto px-6 md:px-8 py-8 custom-scrollbar">
           {Object.entries(groupConfigs).map(([group, config]) => (
             <div key={group}>
-              <p className={cn("text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] mb-4 md:mb-6 px-3 opacity-60", config.color)}>{group}</p>
-              <div className="flex flex-col gap-1 md:gap-2">
+              <p className={cn("text-[11px] md:text-sm font-black uppercase tracking-[0.3em] mb-4 md:mb-8 px-4 opacity-40 font-display", config.color)}>{group}</p>
+              <div className="flex flex-col gap-2 md:gap-3">
                 {tabs.filter(t => t.group === group).map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
@@ -206,14 +206,14 @@ export default function App() {
                         setIsSidebarOpen(false);
                       }}
                       className={cn(
-                        "flex items-center gap-4 md:gap-5 px-5 py-4 md:py-4.5 rounded-[1.5rem] md:rounded-[1.75rem] text-xs md:text-[14px] font-semibold transition-all group cursor-pointer border-2 border-transparent",
+                        "flex items-center gap-4 md:gap-5 px-5 py-4 md:py-4.5 rounded-[1.5rem] md:rounded-[2rem] text-sm md:text-base font-bold transition-all group cursor-pointer border-2 border-transparent",
                         isActive 
-                          ? `${tab.bg} ${tab.color} border-${tab.color.split('-')[1]}-100 shadow-[0_12px_24px_-8px_rgba(0,0,0,0.1)]` 
-                          : "text-slate-500 hover:text-slate-900 hover:bg-slate-100/50"
+                          ? `${tab.bg} ${tab.color} border-${tab.color.split('-')[1]}-100 shadow-[0_12px_32px_-10px_rgba(0,0,0,0.15)]` 
+                          : "text-slate-500 hover:text-slate-900 hover:bg-slate-100/80"
                       )}
                     >
                       <Icon className={cn("w-5 h-5 md:w-6 md:h-6", isActive ? tab.color : "text-slate-400 group-hover:text-slate-900 transition-colors")} />
-                      <span className="font-medium tracking-tight">{tab.label}</span>
+                      <span className="font-bold tracking-tight">{tab.label}</span>
                     </button>
                   );
                 })}
