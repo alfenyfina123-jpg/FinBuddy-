@@ -1,0 +1,111 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user business profile information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "businessName": { "type": "string" },
+        "directorName": { "type": "string" },
+        "qrisPayload": { "type": "string" },
+        "autoGeneratePdfLedger": { "type": "boolean" },
+        "thermalPrinterOptimization": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "createdAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A record of income or expense.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "description": { "type": "string" },
+        "customerName": { "type": "string" },
+        "paymentMethod": { "type": "string", "enum": ["cash", "qris", "credit"] },
+        "date": { "type": "string", "format": "date" },
+        "productName": { "type": "string" },
+        "hpp": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "category", "amount", "date", "createdAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Inventory items for the business.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "hpp": { "type": "number" },
+        "stock": { "type": "number" },
+        "unit": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "code", "name", "price", "hpp", "stock", "createdAt"]
+    },
+    "Debt": {
+      "title": "Debt",
+      "description": "Debt or Receivable records.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "transactionId": { "type": "string" },
+        "type": { "type": "string", "enum": ["payable", "receivable"] },
+        "contactName": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "remainingAmount": { "type": "number" },
+        "dueDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["pending", "partially_paid", "paid"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "transactionId", "type", "contactName", "totalAmount", "remainingAmount", "status", "createdAt"]
+    },
+    "TaxChecklist": {
+      "title": "Tax Checklist",
+      "description": "Compliance steps for tax reporting.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "period": { "type": "string" },
+        "step1": { "type": "boolean" },
+        "step2": { "type": "boolean" },
+        "step3": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "period"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User business profiles."
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "All financial transactions."
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Inventory items."
+    },
+    "/debts/{debtId}": {
+      "schema": "Debt",
+      "description": "Hutang and Piutang records."
+    },
+    "/taxChecklist/{checklistId}": {
+      "schema": "TaxChecklist",
+      "description": "Tax compliance tracking."
+    }
+  }
+}
