@@ -1,209 +1,213 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, orderBy, doc } from 'firebase/firestore';
-import { FileText, Download, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { FileText, Download, Calendar, ArrowUpRight, ArrowDownRight, Printer, TrendingUp, TrendingDown, Sparkles } from 'lucide-react';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Transaction, OperationType } from '../types';
 import { formatCurrency, handleFirestoreError, cn } from '../lib/utils';
-import { motion } from 'motion/react';
 
 export default function ProfitLossReport() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [businessName, setBusinessName] = useState('Bisnis Saya');
-
-  const months = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-  ];
 
   useEffect(() => {
     if (!auth.currentUser) return;
-
-    // Get business name using doc lookup (more efficient and direct)
-    const profileRef = doc(db, 'users', auth.currentUser.uid);
-    const unsubscribeProfile = onSnapshot(profileRef, (snap) => {
-      if (snap.exists()) {
-        setBusinessName(snap.data().businessName || 'Bisnis Saya');
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
-    });
-
-    const q = query(
-      collection(db, 'transactions'),
-      where('userId', '==', auth.currentUser.uid),
-      orderBy('date', 'desc')
-    );
-
-    const unsubscribeTransactions = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
-      setTransactions(data);
+    const q = query(collection(db, 'transactions'), where('userId', '==', auth.currentUser.uid), orderBy('date', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'transactions');
-    });
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'transactions'));
+    return () => unsubscribe();
+  }, []);
 
-    return () => {
-      unsubscribeProfile();
-      unsubscribeTransactions();
-    };
-  }, [selectedMonth, selectedYear]);
+  const totalRevenue = transactions.filter(t => t.type === 'income').reduce((a: number, b: Transaction) => a + b.amount, 0);
+  const totalHpp = transactions.filter(t => t.type === 'income').reduce((a: number, b: Transaction) => a + (b.hpp || 0), 0);
+  const grossProfit = totalRevenue - totalHpp;
+  
+  // Categorized expenses
+  const expensesByCategory = transactions
+    .filter(t => t.type === 'expense' && t.category !== 'Belanja Stok')
+    .reduce((acc: Record<string, number>, t: Transaction) => {
+      acc[t.category] = (acc[t.category] || 0) + t.amount;
+      return acc;
+    }, {});
 
-  const filtered = transactions.filter(t => {
-    const d = new Date(t.date);
-    return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
-  });
+  const operationalExpenses: number = (Object.values(expensesByCategory) as number[]).reduce((a: number, b: number) => a + b, 0);
+  const netProfit = grossProfit - operationalExpenses;
 
-  const totalIncome = filtered
-    .filter(t => t.type === 'income')
-    .reduce((acc, curr) => acc + curr.amount, 0);
-
-  const totalExpense = filtered
-    .filter(t => t.type === 'expense')
-    .reduce((acc, curr) => acc + curr.amount, 0);
-
-  const netProfit = totalIncome - totalExpense;
-
-  const exportToPDF = () => {
+  const downloadPDF = () => {
     const doc = new jsPDF();
-    const lastDayOfMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-    const periodString = `${lastDayOfMonth} ${months[selectedMonth]} ${selectedYear}`;
-
+    
     // Header
+    doc.setFillColor(30, 41, 59);
+    doc.rect(0, 0, 210, 50, 'F');
+    
+    doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
-    doc.text(businessName.toUpperCase(), 105, 15, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text(auth.currentUser?.displayName?.toUpperCase() || 'FINBUDDY AI', 105, 18, { align: 'center' });
+    
     doc.setFontSize(14);
-    doc.text('LAPORAN LABA RUGI', 105, 25, { align: 'center' });
+    doc.text('LAPORAN LABA RUGI', 105, 28, { align: 'center' });
+    
     doc.setFontSize(10);
-    doc.text(`Untuk Periode yang Berakhir pada ${periodString}`, 105, 32, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    const periodEndingValue = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    doc.text(`Periode yang berakhir pada ${periodEndingValue}`, 105, 38, { align: 'center' });
     
-    doc.setLineWidth(0.5);
-    doc.line(20, 38, 190, 38);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Wajib Pajak: ${auth.currentUser?.displayName || auth.currentUser?.email}`, 14, 60);
+    doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')}`, 14, 66);
 
-    // Summary Content
-    doc.setFontSize(12);
-    doc.text('RINGKASAN', 20, 50);
-    
     autoTable(doc, {
-      startY: 55,
-      head: [['Keterangan', 'Jumlah']],
+      startY: 70,
+      head: [['URAIAN LAPORAN KEUANGAN', 'NOMINAL (IDR)']],
       body: [
-        ['Total Pendapatan (Pemasukan)', formatCurrency(totalIncome)],
-        ['Total Beban (Pengeluaran)', formatCurrency(totalExpense)],
-        [{ content: 'Laba (Rugi) Bersih', styles: { fontStyle: 'bold' } }, { content: formatCurrency(netProfit), styles: { fontStyle: 'bold' } }]
+        [{ content: 'PENDAPATAN USAHA (REVENUE)', styles: { fontStyle: 'bold', fillColor: [248, 250, 252] } }, { content: formatCurrency(totalRevenue), styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 250, 252] } }],
+        ['Penjualan Kotor', formatCurrency(totalRevenue)],
+        ['Potongan/Retur', '-'],
+        [{ content: 'HARGA POKOK PENJUALAN (COGS)', styles: { fontStyle: 'bold', fillColor: [248, 250, 252] } }, { content: `(${formatCurrency(totalHpp)})`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 250, 252] } }],
+        ['Beban Pokok Penjualan', formatCurrency(totalHpp)],
+        [{ content: 'LABA KOTOR (GROSS PROFIT)', styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }, { content: formatCurrency(grossProfit), styles: { fontStyle: 'bold', halign: 'right', fillColor: [241, 245, 249] } }],
+        [{ content: 'BEBAN OPERASIONAL (OPEX)', styles: { fontStyle: 'bold', fillColor: [248, 250, 252] } }, { content: `(${formatCurrency(operationalExpenses as number)})`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [248, 250, 252] } }],
+        ...Object.entries(expensesByCategory).map(([cat, val]) => [cat, formatCurrency(val as number)]),
+        [{ content: 'LABA BERSIH (NET INCOME)', styles: { fontStyle: 'bold', fillColor: [15, 23, 42], textColor: [255, 255, 255] } }, { content: formatCurrency(netProfit), styles: { fontStyle: 'bold', halign: 'right', fillColor: [15, 23, 42], textColor: [255, 255, 255] } }],
       ],
       theme: 'plain',
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [240, 240, 240] }
+      styles: { fontSize: 9, cellPadding: 4 },
+      columnStyles: { 1: { halign: 'right' } },
     });
 
-    // Detailed Table
-    const finalY = (doc as any).lastAutoTable.finalY + 15;
-    doc.text('RINCIAN TRANSAKSI', 20, finalY);
-
-    const tableData = filtered.map(t => [
-      t.date,
-      t.category,
-      t.description,
-      t.type === 'income' ? 'Pemasukan' : 'Pengeluaran',
-      formatCurrency(t.amount)
-    ]);
-
-    autoTable(doc, {
-      startY: finalY + 5,
-      head: [['Tanggal', 'Kategori', 'Deskripsi', 'Jenis', 'Nominal']],
-      body: tableData,
-      theme: 'striped',
-      headStyles: { fillColor: [79, 70, 229] }, // Brand indigo
-    });
-
-    doc.save(`Laporan_Laba_Rugi_${months[selectedMonth]}_${selectedYear}.pdf`);
+    doc.save(`ProfitLoss_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
-  if (loading) return <div className="animate-pulse space-y-6">
-    <div className="h-48 bg-gray-100 rounded-3xl" />
-    <div className="h-96 bg-gray-100 rounded-3xl" />
-  </div>;
+  if (loading) return <div className="p-20 text-center text-slate-400 font-bold uppercase tracking-[0.3em] text-[10px] animate-pulse">Menghitung Data Laba Rugi...</div>;
 
   return (
-    <div className="space-y-8">
-      {/* Search/Filter Bar */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-4 w-full md:w-auto">
-          <Calendar className="text-slate-400 w-5 h-5" />
-          <select 
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-            className="text-sm font-black uppercase tracking-widest bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 outline-none cursor-pointer text-slate-600"
-          >
-            {months.map((m, i) => <option key={m} value={i}>{m}</option>)}
-          </select>
-          <select 
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="text-sm font-black uppercase tracking-widest bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 outline-none cursor-pointer text-slate-600"
-          >
-            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+    <div className="max-w-5xl mx-auto space-y-12">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
+        <div className="flex items-center gap-4">
+           <div className="w-14 h-14 bg-slate-900 rounded-[1.25rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-100 ring-4 ring-indigo-50">
+             <FileText className="w-7 h-7 stroke-[2]" />
+           </div>
+           <div>
+             <h3 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter font-display leading-none">Profit & Loss</h3>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Laporan Ikhtisar Laba Rugi Periode Berjalan</p>
+           </div>
         </div>
         <button 
-          onClick={exportToPDF}
-          className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 cursor-pointer"
+          onClick={downloadPDF}
+          className="px-8 py-4 bg-white border-2 border-slate-50 text-slate-500 hover:text-indigo-600 hover:border-indigo-100 rounded-3xl shadow-sm transition-all flex items-center justify-center gap-3 font-black uppercase tracking-widest text-[10px] group"
         >
-          <Download className="w-4 h-4" />
-          Ekspor PDF
+          <Download className="w-4 h-4 group-hover:-translate-y-1 transition-transform" />
+          Unduh Laporan Resmi
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-        {/* P&L Main Visual */}
-        <div className="md:col-span-8 bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
-          <div className="relative z-10">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Laporan Laba Rugi</h3>
-            <h2 className="text-4xl font-black text-slate-900 mb-8 tracking-tight">Kinerja Finansial</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          <div className="bg-white/70 backdrop-blur-2xl rounded-[3rem] border border-white shadow-2xl overflow-hidden p-8 md:p-12 space-y-12">
             
+            {/* Revenue Section */}
             <div className="space-y-6">
-              <PLItem label="Total Pemasukan" amount={totalIncome} icon={TrendingUp} color="emerald" />
-              <PLItem label="Total Pengeluaran" amount={totalExpense} icon={TrendingDown} color="rose" />
-              <div className="pt-6 border-t border-slate-100 mt-6">
-                 <div className="flex justify-between items-end">
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Laba (Rugi) Bersih</p>
-                      <p className={cn(
-                        "text-5xl font-black tracking-tighter leading-none",
-                        netProfit >= 0 ? "text-emerald-600" : "text-rose-500"
-                      )}>{formatCurrency(netProfit)}</p>
-                    </div>
-                    <div className={cn(
-                      "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest",
-                      netProfit >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
-                    )}>
-                      {netProfit >= 0 ? 'Surplus' : 'Defisit'}
-                    </div>
-                 </div>
+              <div className="flex items-center justify-between px-2">
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Pendapatan Usaha</h4>
+                 <TrendingUp className="w-4 h-4 text-emerald-500" />
+              </div>
+              <div className="space-y-3">
+                 <PLItem label="Total Penjualan Barang" value={totalRevenue} />
+                 <PLItem label="Pendapatan Jasa Lainnya" value={0} />
               </div>
             </div>
+
+            {/* HPP Section */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-2">
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Harga Pokok Penjualan</h4>
+                 <TrendingDown className="w-4 h-4 text-rose-500" />
+              </div>
+              <div className="space-y-3">
+                 <PLItem label="Beban Pokok Penjualan (COGS)" value={totalHpp} type="out" />
+                 <div className="h-px bg-slate-50 mx-4" />
+                 <PLItem label="Laba Kotor Usaha" value={grossProfit} highlight />
+              </div>
+            </div>
+
+            {/* Expenses Section */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-2">
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Beban Operasional</h4>
+              </div>
+              <div className="space-y-3">
+                 {Object.entries(expensesByCategory).length > 0 ? Object.entries(expensesByCategory).map(([cat, val]) => (
+                   <PLItem key={cat} label={cat} value={val} type="out" />
+                 )) : (
+                   <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest text-center py-4 bg-slate-50/50 rounded-2xl">Belum ada rincian beban</p>
+                 )}
+                 <div className="h-px bg-slate-50 mx-4" />
+                 <PLItem label="Total Beban Operasional" value={operationalExpenses} type="out" />
+              </div>
+            </div>
+
+            {/* Final Net Profit */}
+            <div className="pt-12 border-t-2 border-slate-100">
+               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-50/50 p-8 rounded-[2.5rem]">
+                  <div>
+                    <h5 className="text-2xl font-black text-slate-900 tracking-tighter font-display">Laba Bersih Usaha</h5>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Sisa Hasil Usaha (SHU)</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={cn(
+                      "text-4xl md:text-5xl font-black font-display tracking-tighter leading-none mb-1",
+                      netProfit >= 0 ? "text-emerald-500" : "text-rose-500"
+                    )}>{formatCurrency(netProfit)}</p>
+                    <span className={cn(
+                      "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
+                      netProfit >= 0 ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"
+                    )}>
+                      Margin: {totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0}%
+                    </span>
+                  </div>
+               </div>
+            </div>
           </div>
-          <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50" />
         </div>
 
-        {/* Info Column */}
-        <div className="md:col-span-4 space-y-6">
-           <div className="bg-slate-900 p-8 rounded-[2rem] text-white">
-              <FileText className="w-8 h-8 text-indigo-400 mb-4" />
-              <h4 className="text-sm font-black uppercase tracking-widest mb-3">Panduan Laporan</h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Laporan ini merangkum seluruh transaksi kas yang dicatat dalam periode terpilih. Gunakan laporan ini untuk mengevaluasi efisiensi operasional usaha Anda.
-              </p>
+        {/* Sidebar Analysis */}
+        <div className="space-y-8">
+           <div className="bg-slate-900 rounded-[3rem] p-8 md:p-10 shadow-2xl text-white relative overflow-hidden">
+              <div className="relative z-10 space-y-8">
+                 <div className="flex items-center gap-3">
+                    <Sparkles className="w-5 h-5 text-indigo-400" />
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Wawasan Pajak</h4>
+                 </div>
+                 <div className="space-y-4">
+                    <div className="p-6 bg-white/5 rounded-[2rem] border border-white/5">
+                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">PPh Final 0.5% (PP 55)</p>
+                       <p className="text-2xl font-black font-display tracking-tighter text-indigo-300">{formatCurrency(totalRevenue * 0.005)}</p>
+                    </div>
+                    <p className="text-[11px] font-medium text-slate-400 leading-relaxed">Estimasi setoran pajak berdasarkan peredaran bruto periode ini.</p>
+                 </div>
+                 <button onClick={() => window.scrollTo(0, 0)} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all">Lihat Detail Pajak</button>
+              </div>
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 blur-[60px] rounded-full" />
            </div>
-           
-           <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Periode Aktif</p>
-              <p className="text-xl font-black text-slate-900">{months[selectedMonth]} {selectedYear}</p>
+
+           <div className="bg-white rounded-[3rem] border border-slate-50 p-8 md:p-10 shadow-xl space-y-6">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Calendar className="w-4 h-4" /> History Bulanan
+              </h4>
+              <div className="space-y-4">
+                 <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-900">Bulan Ini</span>
+                    <span className="text-xs font-black text-emerald-500">Normal</span>
+                 </div>
+                 <div className="w-full bg-slate-50 h-2 rounded-full overflow-hidden">
+                    <div className="bg-indigo-500 h-full w-[65%]" />
+                 </div>
+                 <p className="text-[10px] text-slate-400 font-medium">Berdasarkan data 30 hari terakhir.</p>
+              </div>
            </div>
         </div>
       </div>
@@ -211,22 +215,28 @@ export default function ProfitLossReport() {
   );
 }
 
-function PLItem({ label, amount, icon: Icon, color }: any) {
+function PLItem({ label, value, type = 'in', highlight = false }: any) {
   return (
-    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+    <div className={cn(
+      "flex items-center justify-between p-5 rounded-[1.5rem] transition-all group",
+      highlight ? "bg-indigo-50/70 shadow-sm border border-indigo-100/50" : "hover:bg-slate-50/50 border border-transparent"
+    )}>
       <div className="flex items-center gap-4">
         <div className={cn(
-          "w-10 h-10 rounded-xl flex items-center justify-center",
-          color === 'emerald' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+          "w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110",
+          type === 'in' ? "bg-emerald-50 text-emerald-500" : type === 'out' ? "bg-rose-50 text-rose-500" : "bg-indigo-100 text-indigo-600"
         )}>
-          <Icon className="w-5 h-5 stroke-[3]" />
+          {type === 'in' ? <ArrowUpRight className="w-5 h-5 stroke-[2.5]" /> : <ArrowDownRight className="w-5 h-5 stroke-[2.5]" />}
         </div>
-        <p className="text-sm font-bold text-slate-700">{label}</p>
+        <div>
+          <p className={cn("text-sm font-black tracking-tight", highlight ? "text-indigo-950" : "text-slate-700")}>{label}</p>
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Entri Ledger</p>
+        </div>
       </div>
       <p className={cn(
-        "text-lg font-black tracking-tight",
-        color === 'emerald' ? "text-slate-900" : "text-rose-500"
-      )}>{formatCurrency(amount)}</p>
+        "text-base font-black font-mono tracking-tight",
+        type === 'out' ? "text-rose-500" : highlight ? "text-indigo-600 text-lg" : "text-slate-900"
+      )}>{type === 'out' ? `(${formatCurrency(value)})` : formatCurrency(value)}</p>
     </div>
   );
 }

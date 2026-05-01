@@ -44,8 +44,15 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'analysis' | 'tax' | 'profitLoss' | 'journal' | 'ledger' | 'balanceSheet' | 'cashFlow' | 'settings' | 'aiAnalytics' | 'aiAssistant'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'analysis' | 'tax' | 'profitLoss' | 'journal' | 'ledger' | 'balanceSheet' | 'cashFlow' | 'settings' | 'aiAnalytics' | 'aiAssistant' | 'inventory' | 'debts'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const mainRef = React.useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -183,11 +190,11 @@ export default function App() {
           </button>
         </div>
 
-        <nav className="flex-1 min-h-0 flex flex-col gap-6 md:gap-8 overflow-y-auto px-6 md:px-8 py-4 custom-scrollbar">
+        <nav className="flex-1 min-h-0 flex flex-col gap-6 md:gap-10 overflow-y-auto px-6 md:px-8 py-8 custom-scrollbar">
           {Object.entries(groupConfigs).map(([group, config]) => (
             <div key={group}>
-              <p className={cn("text-[8px] md:text-[10px] font-black uppercase tracking-[0.15em] mb-3 md:mb-4 px-2", config.color)}>{group}</p>
-              <div className="flex flex-col gap-1 md:gap-1.5">
+              <p className={cn("text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] mb-4 md:mb-6 px-3 opacity-60", config.color)}>{group}</p>
+              <div className="flex flex-col gap-1 md:gap-2">
                 {tabs.filter(t => t.group === group).map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
@@ -199,14 +206,14 @@ export default function App() {
                         setIsSidebarOpen(false);
                       }}
                       className={cn(
-                        "flex items-center gap-3.5 md:gap-4 px-4 py-3 md:py-3.5 rounded-[1rem] md:rounded-[1.25rem] text-[10px] md:text-[11px] font-black transition-all group cursor-pointer border border-transparent uppercase tracking-wider",
+                        "flex items-center gap-4 md:gap-5 px-5 py-4 md:py-4.5 rounded-[1.5rem] md:rounded-[1.75rem] text-xs md:text-[14px] font-semibold transition-all group cursor-pointer border-2 border-transparent",
                         isActive 
-                          ? `${tab.bg} ${tab.color} border-${tab.color.split('-')[1]}-100 shadow-[0_8px_16px_-4px_rgba(0,0,0,0.05)]` 
-                          : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"
+                          ? `${tab.bg} ${tab.color} border-${tab.color.split('-')[1]}-100 shadow-[0_12px_24px_-8px_rgba(0,0,0,0.1)]` 
+                          : "text-slate-500 hover:text-slate-900 hover:bg-slate-100/50"
                       )}
                     >
-                      <Icon className={cn("w-4 h-4 md:w-4.5 md:h-4.5", isActive ? tab.color : "text-slate-300 group-hover:text-slate-900 transition-colors")} />
-                      {tab.label}
+                      <Icon className={cn("w-5 h-5 md:w-6 md:h-6", isActive ? tab.color : "text-slate-400 group-hover:text-slate-900 transition-colors")} />
+                      <span className="font-medium tracking-tight">{tab.label}</span>
                     </button>
                   );
                 })}
@@ -237,19 +244,19 @@ export default function App() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto bg-[#FAFBFF] relative custom-scrollbar flex flex-col">
-        <div className="flex-1 p-4 md:p-8 lg:p-12 w-full max-w-[1400px] mx-auto">
+      <main ref={mainRef} className="flex-1 h-screen overflow-y-auto bg-[#FAFBFF] relative custom-scrollbar">
+        <div className="min-h-full p-4 md:p-8 lg:p-12 pb-40 w-full max-w-[1400px] mx-auto flex flex-col">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
               transition={{ 
-                duration: 0.15, 
-                ease: "linear"
+                duration: 0.4, 
+                ease: [0.23, 1, 0.32, 1]
               }}
-              className="min-h-full will-change-[opacity] overflow-x-hidden"
+              className="flex-1 flex flex-col will-change-[opacity,transform]"
             >
               <header className="mb-6 md:mb-10 flex flex-col md:flex-row md:justify-between md:items-end border-b border-slate-100 pb-6 gap-4">
                 <div className="max-w-2xl">
@@ -275,7 +282,7 @@ export default function App() {
                 </div>
               </header>
 
-              <div className="pb-8">
+              <div className="flex-1 pb-32">
                 {activeTab === 'dashboard' && <Dashboard setActiveTab={setActiveTab} />}
                 {activeTab === 'transactions' && <TransactionList />}
                 {activeTab === 'journal' && <GeneralJournal />}
@@ -516,4 +523,3 @@ function LoginView() {
     </div>
   );
 }
-

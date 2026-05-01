@@ -5,18 +5,9 @@ import { ShoppingBag, TrendingUp, DollarSign, Percent } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
 import { Transaction, OperationType } from '../types';
 import { formatCurrency, handleFirestoreError, cn } from '../lib/utils';
-import { motion } from 'motion/react';
-
-interface ProductStats {
-  name: string;
-  totalSales: number;
-  totalHPP: number;
-  margin: number;
-  marginPercent: number;
-}
 
 export default function MarginAnalysis() {
-  const [productStats, setProductStats] = useState<ProductStats[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,32 +20,7 @@ export default function MarginAnalysis() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const transactions = snapshot.docs.map(doc => doc.data() as Transaction);
-      
-      const statsMap = new Map<string, { sales: number; hpp: number }>();
-      
-      transactions.forEach(t => {
-        if (!t.productName) return;
-        const existing = statsMap.get(t.productName) || { sales: 0, hpp: 0 };
-        statsMap.set(t.productName, {
-          sales: existing.sales + t.amount,
-          hpp: existing.hpp + (t.hpp || 0)
-        });
-      });
-
-      const stats: ProductStats[] = Array.from(statsMap.entries()).map(([name, data]) => {
-        const margin = data.sales - data.hpp;
-        const marginPercent = data.sales > 0 ? (margin / data.sales) * 100 : 0;
-        return {
-          name,
-          totalSales: data.sales,
-          totalHPP: data.hpp,
-          margin,
-          marginPercent
-        };
-      }).sort((a, b) => b.margin - a.margin);
-
-      setProductStats(stats);
+      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'transactions');
@@ -63,171 +29,138 @@ export default function MarginAnalysis() {
     return () => unsubscribe();
   }, []);
 
-  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+  const productAnalysis = transactions.reduce((acc: any, t) => {
+    const productName = t.productName || 'Tanpa Nama Produk';
+    if (!acc[productName]) {
+      acc[productName] = {
+        name: productName,
+        revenue: 0,
+        totalHpp: 0,
+        count: 0
+      };
+    }
+    acc[productName].revenue += t.amount;
+    acc[productName].totalHpp += (t.hpp || 0);
+    acc[productName].count += 1;
+    return acc;
+  }, {});
 
-  if (loading) return <div className="space-y-8 animate-pulse">
-    <div className="h-64 bg-gray-100 rounded-3xl" />
-    <div className="h-96 bg-gray-100 rounded-3xl" />
-  </div>;
+  const analysisList = Object.values(productAnalysis).map((p: any) => ({
+    ...p,
+    margin: p.revenue - p.totalHpp,
+    marginPercent: p.revenue > 0 ? ((p.revenue - p.totalHpp) / p.revenue) * 100 : 0
+  })).sort((a, b) => b.margin - a.margin);
 
-  if (productStats.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-dashed border-gray-200">
-        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-6">
-          <ShoppingBag className="w-8 h-8 text-gray-300" />
-        </div>
-        <h3 className="text-sm font-semibold text-brand-primary">Belum ada data produk</h3>
-        <p className="text-xs text-brand-secondary mt-2 text-center max-w-xs">
-          Tambahkan transaksi pemasukan dengan menyebutkan nama produk dan HPP untuk melihat analisis margin.
-        </p>
-      </div>
-    );
-  }
+  const COLORS = ['#4f46e5', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4'];
+
+  if (loading) return <div className="p-8 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Menganalisis Profitabilitas...</div>;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-      <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Chart View Bento */}
-        <div className="md:col-span-2 bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-black text-slate-900 flex items-center gap-3 mb-10 uppercase tracking-widest">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-              <TrendingUp className="w-4 h-4 stroke-[3]" />
-            </div>
-            Distribusi Penjualan
-          </h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={productStats}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={80}
-                  outerRadius={120}
-                  paddingAngle={8}
-                  dataKey="totalSales"
-                >
-                  {productStats.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} transitionDuration={1000} stroke="none" />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-slate-900 p-4 shadow-2xl rounded-2xl border border-slate-800 text-xs text-white">
-                          <p className="font-black mb-1 uppercase tracking-wider">{data.name}</p>
-                          <p className="text-slate-400 font-bold">{formatCurrency(data.totalSales)}</p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex flex-wrap gap-6 justify-center mt-6">
-            {productStats.slice(0, 4).map((p, i) => (
-              <div key={p.name} className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{p.name}</span>
+    <div className="space-y-10">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white/60 backdrop-blur-md p-8 md:p-10 rounded-[2.5rem] border border-white shadow-xl">
+           <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+                <Percent className="w-5 h-5" />
               </div>
-            ))}
-          </div>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight font-display">Proporsi Margin Per Produk</h3>
+           </div>
+           
+           <div className="h-[350px]">
+             <ResponsiveContainer width="100%" height="100%">
+               <PieChart>
+                 <Pie
+                   data={analysisList.slice(0, 8)}
+                   cx="50%"
+                   cy="50%"
+                   innerRadius={80}
+                   outerRadius={120}
+                   paddingAngle={4}
+                   dataKey="margin"
+                   nameKey="name"
+                 >
+                   {analysisList.map((_, index) => (
+                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                   ))}
+                 </Pie>
+                 <Tooltip 
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                    itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
+                    formatter={(v: any) => formatCurrency(v)}
+                 />
+                 <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '20px', fontWeight: 'bold', textTransform: 'uppercase' }} />
+               </PieChart>
+             </ResponsiveContainer>
+           </div>
         </div>
 
-        {/* Highlight Stats Bento Dark */}
-        <div className="space-y-6">
-          <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white relative overflow-hidden shadow-2xl shadow-slate-900/40 h-full flex flex-col">
-            <div className="relative z-10 flex-1">
-              <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center mb-6">
-                <ShoppingBag className="w-6 h-6 text-emerald-400" />
+        <div className="bg-[#1e293b] p-8 md:p-10 rounded-[2.5rem] text-white">
+           <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-white">
+                <TrendingUp className="w-5 h-5" />
               </div>
-              <h3 className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-500 mb-2">Penjualan Terlaris</h3>
-              <h4 className="text-3xl font-black tracking-tighter mb-8 leading-tight">{productStats[0].name}</h4>
-              
-              <div className="space-y-6 pt-6 border-t border-slate-800">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-1">Keuntungan</p>
-                    <p className="text-2xl font-black text-emerald-400 tracking-tight">{formatCurrency(productStats[0].margin)}</p>
-                  </div>
-                  <div className="bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-black">
-                    {productStats[0].marginPercent.toFixed(1)}%
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                   <div className="flex justify-between text-[10px] font-black uppercase text-slate-500 tracking-widest">
-                      <span>Profit Margin</span>
-                      <span>Target 60%</span>
-                   </div>
-                   <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${productStats[0].marginPercent}%` }}
-                        className="h-full bg-emerald-500 rounded-full" 
-                      />
+              <h3 className="text-xl font-black text-white tracking-tight font-display">Produk Terlaris (Leaderboard)</h3>
+           </div>
+
+           <div className="space-y-6">
+              {analysisList.slice(0, 5).map((p, i) => (
+                <div key={p.name} className="flex items-center gap-6 group">
+                   <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center font-black text-xs text-white/40">0{i+1}</div>
+                   <div className="flex-1">
+                      <div className="flex justify-between items-end mb-2">
+                        <p className="text-sm font-black tracking-tight">{p.name}</p>
+                        <p className="text-[10px] font-bold text-white/40 uppercase">{p.count} Transaksi</p>
+                      </div>
+                      <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                         <div 
+                           className="h-full bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(79,70,229,0.5)]" 
+                           style={{ width: `${(p.revenue / analysisList[0].revenue) * 100}%` }}
+                         />
+                      </div>
                    </div>
                 </div>
-              </div>
-            </div>
-          </div>
+              ))}
+           </div>
         </div>
       </div>
 
-      {/* Product Table Bento */}
-      <div className="md:col-span-12 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden mt-4">
-        <div className="px-10 py-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Analisis Profitabilitas Produk</h3>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Live Data</span>
-          </div>
+      <div className="bg-white/60 backdrop-blur-md rounded-[2.5rem] border border-white shadow-xl overflow-hidden">
+        <div className="p-8 md:p-10 border-b border-slate-50">
+           <h3 className="text-xl font-black text-slate-900 tracking-tight font-display">Detail Profitabilitas Produk</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full">
             <thead>
-              <tr className="bg-white">
-                <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Produk</th>
-                <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Penjualan</th>
-                <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Total HPP</th>
-                <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Margin Bersih</th>
-                <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Profit %</th>
+              <tr className="bg-slate-50/50">
+                <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Produk</th>
+                <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Vol. Terjual</th>
+                <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Total Omzet</th>
+                <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Profit Kotor</th>
+                <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Persentase Margin</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {productStats.map((p, i) => (
-                <tr key={p.name} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-10 py-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100 group-hover:bg-white transition-colors">
-                        <ShoppingBag className="w-4 h-4 text-slate-400" />
-                      </div>
-                      <p className="text-sm font-black text-slate-900 tracking-tight">{p.name}</p>
+              {analysisList.map((p) => (
+                <tr key={p.name} className="hover:bg-white transition-colors">
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-3">
+                       <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400">
+                          <ShoppingBag className="w-4 h-4" />
+                       </div>
+                       <span className="text-sm font-black text-slate-900">{p.name}</span>
                     </div>
                   </td>
-                  <td className="px-10 py-6 text-right">
-                    <p className="text-sm font-black text-slate-900">{formatCurrency(p.totalSales)}</p>
-                  </td>
-                  <td className="px-10 py-6 text-right">
-                    <p className="text-xs font-bold text-slate-400 font-mono">{formatCurrency(p.totalHPP)}</p>
-                  </td>
-                  <td className="px-10 py-6 text-right">
-                    <p className="text-sm font-black text-indigo-600 tracking-tight">{formatCurrency(p.margin)}</p>
-                  </td>
-                  <td className="px-10 py-6">
-                    <div className="flex items-center justify-center gap-4">
-                       <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden hidden lg:block">
-                          <motion.div 
-                            initial={{ width: 0 }}
-                            animate={{ width: `${Math.min(p.marginPercent, 100)}%` }}
-                            className={cn(
-                              "h-full rounded-full",
-                              p.marginPercent >= 50 ? "bg-emerald-500" : p.marginPercent >= 20 ? "bg-amber-400" : "bg-rose-400"
-                            )} 
+                  <td className="px-8 py-5 text-sm font-bold text-slate-600">{p.count} Unit</td>
+                  <td className="px-8 py-5 text-sm font-black text-slate-900">{formatCurrency(p.revenue)}</td>
+                  <td className="px-8 py-5 text-sm font-black text-emerald-600">+{formatCurrency(p.margin)}</td>
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-3">
+                       <div className="flex-1 h-1.5 w-24 bg-slate-100 rounded-full overflow-hidden">
+                          <div className={cn(
+                            "h-full rounded-full transition-all duration-1000",
+                            p.marginPercent >= 20 ? "bg-emerald-500" : "bg-rose-500"
+                          )} 
+                          style={{ width: `${Math.min(100, Math.max(0, p.marginPercent))}%` }} 
                           />
                        </div>
                        <span className={cn(

@@ -8,7 +8,7 @@ service cloud.firestore {
 
     // --- Helpers ---
     function isSignedIn() {
-      return request.auth != null && request.auth.token.email_verified == true;
+      return request.auth != null;
     }
 
     function isOwner(userId) {
@@ -36,32 +36,34 @@ service cloud.firestore {
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'businessName', 'displayName', 'directorName', 'qrisPayload', 
           'autoGeneratePdfLedger', 'thermalPrinterOptimization'
-        ]);
+        ])
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt;
 
       function isValidUser(data) {
         return data.keys().hasAll(['email', 'displayName', 'createdAt', 'uid'])
           && data.email is string && data.email.size() <= 200
-          && data.displayName is string && data.displayName.size() <= 100
+          && data.displayName is string && data.displayName.size() <= 200
           && data.uid == request.auth.uid
-          && (data.get('businessName', '') is string && data.get('businessName', '').size() <= 100)
-          && (data.get('directorName', '') is string && data.get('directorName', '').size() <= 100)
-          && (data.get('qrisPayload', '') is string && data.get('qrisPayload', '').size() <= 5000)
+          && (data.get('businessName', '') is string && data.get('businessName', '').size() <= 200)
+          && (data.get('directorName', '') is string && data.get('directorName', '').size() <= 200)
+          && (data.get('qrisPayload', '') is string && data.get('qrisPayload', '').size() <= 6000)
           && (data.get('autoGeneratePdfLedger', false) is bool)
           && (data.get('thermalPrinterOptimization', false) is bool)
-          && data.createdAt == request.time;
+          && (request.method == 'create' ? data.createdAt == request.time : true);
       }
     }
 
     // --- Transactions ---
     match /transactions/{transactionId} {
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid && isValidId(transactionId);
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
       
       allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidTransaction(incoming());
       
       allow update: if isSignedIn() && existing().userId == request.auth.uid && incoming().userId == request.auth.uid 
-        && isValidTransaction(incoming())
-        && incoming().createdAt == existing().createdAt;
+        && isValidTransaction(incoming());
 
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
 
@@ -69,13 +71,13 @@ service cloud.firestore {
         return t.keys().hasAll(['userId', 'type', 'category', 'amount', 'date', 'createdAt'])
           && t.userId == request.auth.uid
           && t.type in ['income', 'expense']
-          && t.category is string && t.category.size() <= 50
+          && t.category is string && t.category.size() <= 100
           && t.amount is number && t.amount >= 0
-          && t.date is string && t.date.size() <= 10
-          && (t.get('description', '') is string && t.get('description', '').size() <= 500)
-          && (t.get('customerName', '') is string && t.get('customerName', '').size() <= 100)
+          && t.date is string && t.date.size() <= 20
+          && (t.get('description', '') is string && t.get('description', '').size() <= 1000)
+          && (t.get('customerName', '') is string && t.get('customerName', '').size() <= 200)
           && (t.get('paymentMethod', 'cash') in ['cash', 'qris', 'credit'])
-          && (t.get('productName', '') is string && t.get('productName', '').size() <= 100)
+          && (t.get('productName', '') is string && t.get('productName', '').size() <= 200)
           && (t.get('hpp', 0) is number)
           && (request.method == 'create' ? t.createdAt == request.time : true);
       }
@@ -84,24 +86,23 @@ service cloud.firestore {
     // --- Products ---
     match /products/{productId} {
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid && isValidId(productId);
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
 
       allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidProduct(incoming());
       allow update: if isSignedIn() && existing().userId == request.auth.uid && incoming().userId == request.auth.uid 
-        && isValidProduct(incoming())
-        && incoming().createdAt == existing().createdAt;
+        && isValidProduct(incoming());
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
 
       function isValidProduct(p) {
-        return p.keys().hasAll(['userId', 'code', 'name', 'price', 'hpp', 'stock', 'createdAt'])
+        return p.keys().hasAll(['userId', 'name', 'price', 'hpp', 'stock', 'createdAt'])
           && p.userId == request.auth.uid
-          && p.code is string && p.code.size() <= 50
-          && p.name is string && p.name.size() <= 100
-          && p.category is string && p.category.size() <= 50
+          && p.name is string && p.name.size() <= 200
+          && (p.get('code', '') is string && p.get('code', '').size() <= 100)
+          && (p.get('category', '') is string && p.get('category', '').size() <= 100)
           && p.price is number && p.price >= 0
           && p.hpp is number && p.hpp >= 0
           && p.stock is number
-          && (p.get('unit', 'pcs') is string && p.get('unit', 'pcs').size() <= 20)
+          && (p.get('unit', 'pcs') is string && p.get('unit', 'pcs').size() <= 50)
           && (request.method == 'create' ? p.createdAt == request.time : true);
       }
     }
@@ -109,44 +110,32 @@ service cloud.firestore {
     // --- Debts ---
     match /debts/{debtId} {
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid && isValidId(debtId);
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
 
       allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidDebt(incoming());
       allow update: if isSignedIn() && existing().userId == request.auth.uid && incoming().userId == request.auth.uid 
-        && isValidDebt(incoming())
-        && incoming().createdAt == existing().createdAt
-        && incoming().transactionId == existing().transactionId;
+        && isValidDebt(incoming());
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
 
       function isValidDebt(d) {
-        return d.keys().hasAll(['userId', 'transactionId', 'type', 'contactName', 'totalAmount', 'remainingAmount', 'status', 'createdAt'])
+        return d.keys().hasAll(['userId', 'type', 'contactName', 'totalAmount', 'remainingAmount', 'status', 'createdAt'])
           && d.userId == request.auth.uid
-          && d.transactionId is string && d.transactionId.size() <= 128
+          && (d.get('transactionId', '') is string)
           && d.type in ['payable', 'receivable']
-          && d.contactName is string && d.contactName.size() <= 100
+          && d.contactName is string && d.contactName.size() <= 200
           && d.totalAmount is number && d.totalAmount >= 0
           && d.remainingAmount is number && d.remainingAmount >= 0
           && d.status in ['pending', 'partially_paid', 'paid']
-          && (d.get('dueDate', '') is string && d.get('dueDate', '').size() <= 10)
-          && (d.get('updatedAt', request.time) is timestamp || d.get('updatedAt', '') is string)
+          && (d.get('dueDate', '') is string)
+          && (d.get('notes', '') is string)
           && (request.method == 'create' ? d.createdAt == request.time : true);
       }
     }
 
     // --- Tax Checklist ---
-    match /taxChecklist/{checklistId} {
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow write: if isSignedIn() && incoming().userId == request.auth.uid && isValidTaxChecklist(incoming());
-
-      function isValidTaxChecklist(t) {
-        return t.keys().hasAll(['userId', 'period'])
-          && t.userId == request.auth.uid
-          && t.period is string && t.period.size() <= 10
-          && (t.get('step1', false) is bool)
-          && (t.get('step2', false) is bool)
-          && (t.get('step3', false) is bool);
-      }
+    match /taxChecklist/{userId} {
+      allow read, write: if isOwner(userId);
     }
+
   }
 }

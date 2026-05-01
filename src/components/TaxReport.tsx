@@ -1,54 +1,26 @@
-import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, doc, setDoc, getDoc } from 'firebase/firestore';
-import { Calculator, Calendar, Info, CheckCircle2, AlertCircle, Download, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { Calculator, AlertCircle, FileText, CheckCircle2, TrendingUp, Info, ChevronRight, Download, Send, Calendar, ShieldCheck, Sparkles, Clock, QrCode, Check } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { db, auth } from '../lib/firebase';
 import { Transaction, OperationType } from '../types';
 import { formatCurrency, handleFirestoreError, cn } from '../lib/utils';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
+
+interface ComplianceChecklist {
+  step1: boolean;
+  step2: boolean;
+  step3: boolean;
+  updatedAt: any;
+}
 
 export default function TaxReport() {
-  const [omset, setOmset] = useState(0);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [businessName, setBusinessName] = useState('Bisnis Saya');
-  const [checklist, setChecklist] = useState<Record<string, boolean>>({
-    step1: false,
-    step2: false,
-    step3: false
-  });
-
-  const months = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-  ];
-
-  const periodId = `${selectedYear}-${(selectedMonth + 1).toString().padStart(2, '0')}`;
+  const [checklist, setChecklist] = useState<ComplianceChecklist>({ step1: false, step2: false, step3: false, updatedAt: null });
 
   useEffect(() => {
     if (!auth.currentUser) return;
-    
-    // Get business name
-    const profileRef = doc(db, 'users', auth.currentUser.uid);
-    const unsubscribeProfile = onSnapshot(profileRef, (snap) => {
-      if (snap.exists()) {
-        setBusinessName(snap.data().businessName || 'Bisnis Saya');
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
-    });
-
-    // Get checklist for the period
-    const checklistRef = doc(db, 'taxChecklist', `${auth.currentUser.uid}_${periodId}`);
-    const unsubscribeChecklist = onSnapshot(checklistRef, (snap) => {
-      if (snap.exists()) {
-        setChecklist(snap.data() as any);
-      } else {
-        setChecklist({ step1: false, step2: false, step3: false });
-      }
-    });
 
     const q = query(
       collection(db, 'transactions'),
@@ -56,261 +28,255 @@ export default function TaxReport() {
       where('type', '==', 'income')
     );
 
-    const unsubscribeTransactions = onSnapshot(q, (snapshot) => {
-      const transactions = snapshot.docs.map(doc => doc.data() as Transaction);
-      
-      const filtered = transactions.filter(t => {
-        const d = new Date(t.date);
-        return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
-      });
-
-      const totalOmset = filtered.reduce((acc, curr) => acc + curr.amount, 0);
-      setOmset(totalOmset);
+    const unsubscribeTrans = onSnapshot(q, (snapshot) => {
+      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'transactions');
-    });
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'transactions'));
+
+    const unsubscribeCheck = onSnapshot(doc(db, 'taxChecklist', auth.currentUser.uid), (snap) => {
+      if (snap.exists()) setChecklist(snap.data() as ComplianceChecklist);
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'taxChecklist'));
 
     return () => {
-      unsubscribeProfile();
-      unsubscribeTransactions();
-      unsubscribeChecklist();
+      unsubscribeTrans();
+      unsubscribeCheck();
     };
-  }, [selectedMonth, selectedYear, periodId]);
+  }, []);
 
-  const toggleStep = async (step: string) => {
+  const toggleStep = async (step: keyof Omit<ComplianceChecklist, 'updatedAt'>) => {
     if (!auth.currentUser) return;
-    const checklistRef = doc(db, 'taxChecklist', `${auth.currentUser.uid}_${periodId}`);
     try {
-      const newStatus = !checklist[step];
-      await setDoc(checklistRef, {
-        ...checklist,
-        [step]: newStatus,
-        userId: auth.currentUser.uid,
-        period: periodId,
-        updatedAt: new Date().toISOString()
-      });
+      const newChecklist = { ...checklist, [step]: !checklist[step], updatedAt: serverTimestamp() };
+      await setDoc(doc(db, 'taxChecklist', auth.currentUser.uid), newChecklist);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `taxChecklist/${periodId}`);
+      handleFirestoreError(error, OperationType.WRITE, 'taxChecklist');
     }
   };
 
-  const pphFinal = omset * 0.005;
-  const nextMonth = selectedMonth === 11 ? 0 : selectedMonth + 1;
-  const nextYear = selectedMonth === 11 ? selectedYear + 1 : selectedYear;
-  
-  const paymentDeadline = `15/${(nextMonth + 1).toString().padStart(2, '0')}/${nextYear}`;
-  const reportDeadline = `20/${(nextMonth + 1).toString().padStart(2, '0')}/${nextYear}`;
+  const totalBruto = transactions.reduce((acc, curr) => acc + curr.amount, 0);
+  const taxAmount = totalBruto * 0.005; // PPh Final UMKM 0.5%
+  const currentMonth = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
-  const exportToPDF = () => {
+  const downloadPDF = () => {
     const doc = new jsPDF();
-    const lastDayOfMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-    const periodString = `${lastDayOfMonth} ${months[selectedMonth]} ${selectedYear}`;
-
-    // Header
-    doc.setFontSize(18);
-    doc.text(businessName.toUpperCase(), 105, 15, { align: 'center' });
-    doc.setFontSize(14);
-    doc.text('LAPORAN KEWAJIBAN PAJAK (PPh FINAL 0.5%)', 105, 25, { align: 'center' });
+    doc.setFontSize(22);
+    doc.text('Laporan Estimasi Pajak PPh Final', 14, 20);
     doc.setFontSize(10);
-    doc.text(`Untuk Periode yang Berakhir pada ${periodString}`, 105, 32, { align: 'center' });
+    doc.text(`Wajib Pajak: ${auth.currentUser?.displayName || auth.currentUser?.email}`, 14, 30);
+    doc.text(`Periode: ${currentMonth}`, 14, 36);
     
-    doc.setLineWidth(0.5);
-    doc.line(20, 38, 190, 38);
-
     doc.setFontSize(12);
-    doc.text('PERHITUNGAN PAJAK', 20, 50);
-
-    autoTable(doc, {
-      startY: 55,
-      head: [['Keterangan', 'Nilai']],
-      body: [
-        ['Total Peredaran Bruto (Omset)', formatCurrency(omset)],
-        ['Tarif Pajak (PP No. 55 Th 2022)', '0.5%'],
-        [{ content: 'Total PPh Terutang', styles: { fontStyle: 'bold' } }, { content: formatCurrency(pphFinal), styles: { fontStyle: 'bold' } }]
-      ],
-      theme: 'plain',
-    });
-
-    const finalY = (doc as any).lastAutoTable.finalY + 15;
-    doc.text('Batas Waktu Pelaksanaan:', 20, finalY);
-    doc.setFontSize(10);
-    doc.text(`- Batas Pembayaran: ${paymentDeadline}`, 25, finalY + 7);
-    doc.text(`- Batas Pelaporan SPT Masa: ${reportDeadline}`, 25, finalY + 14);
-
-    doc.save(`Laporan_Pajak_${months[selectedMonth]}_${selectedYear}.pdf`);
+    doc.text(`Total Peredaran Bruto: ${formatCurrency(totalBruto)}`, 14, 50);
+    doc.text(`Tarif PPh Final UMKM: 0,5%`, 14, 58);
+    doc.text(`Total Pajak Terutang: ${formatCurrency(taxAmount)}`, 14, 66);
+    
+    doc.save(`LaporanPajak_${currentMonth.replace(' ', '_')}.pdf`);
   };
 
-  if (loading) return <div className="animate-pulse space-y-6">
-    <div className="h-48 bg-gray-100 rounded-3xl" />
-    <div className="h-96 bg-gray-100 rounded-3xl" />
-  </div>;
+  if (loading) return <div className="p-8 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Menghitung Estimasi Pajak...</div>;
 
   return (
-    <div className="space-y-8">
-      {/* Selector */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-4 w-full md:w-auto">
-          <Calendar className="text-slate-400 w-5 h-5" />
-          <select 
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-            className="text-sm font-black uppercase tracking-widest bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 outline-none cursor-pointer text-slate-600"
-          >
-            {months.map((m, i) => <option key={m} value={i}>{m}</option>)}
-          </select>
-          <select 
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="text-sm font-black uppercase tracking-widest bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 outline-none cursor-pointer text-slate-600"
-          >
-            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-        <button 
-          onClick={exportToPDF}
-          className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 cursor-pointer"
-        >
-          <Download className="w-4 h-4" />
-          Ekspor PDF
-        </button>
+    <div className="space-y-12">
+      {/* Hero Tax Card */}
+      <div className="bg-slate-900 rounded-[3rem] p-8 md:p-14 text-white relative overflow-hidden ring-1 ring-white/10 group">
+         <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-indigo-500/20 to-transparent pointer-events-none" />
+         <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-violet-600/20 blur-[120px] rounded-full pointer-events-none" />
+         
+         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:items-center">
+            <div className="space-y-8">
+               <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/20 border border-indigo-400/30">
+                    <Calculator className="w-6 h-6 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black tracking-tight font-display">Estimasi PPh Final 0,5%</h3>
+                    <p className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] mt-1">Sesuai PP No. 55 Tahun 2022</p>
+                  </div>
+               </div>
+
+               <div className="space-y-10">
+                  <div className="relative p-8 md:p-10 bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 group-hover:bg-white/10 transition-colors">
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Total Peredaran Bruto ({currentMonth})</p>
+                     <h4 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter font-display">{formatCurrency(totalBruto)}</h4>
+                     
+                     <div className="mt-8 flex items-center gap-6">
+                        <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 border border-emerald-500/30">
+                              <TrendingUp className="w-4 h-4" />
+                           </div>
+                           <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Peredaran Lancar</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 border border-indigo-500/30">
+                              <Calendar className="w-4 h-4" />
+                           </div>
+                           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Update Harian</span>
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-6">
+                     <button 
+                      onClick={downloadPDF}
+                      className="flex-1 px-8 py-5 bg-white text-slate-900 rounded-[1.5rem] md:rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-2xl hover:scale-[1.05] active:scale-[0.95] transition-all flex items-center justify-center gap-3 group"
+                     >
+                        <Download className="w-4 h-4 text-indigo-500 group-hover:-translate-y-1 transition-transform" />
+                        Download Laporan
+                     </button>
+                     <button className="flex-1 px-8 py-5 bg-indigo-600 text-white rounded-[1.5rem] md:rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-2xl shadow-indigo-900/40 hover:bg-white hover:text-slate-900 transition-all flex items-center justify-center gap-3">
+                        <Send className="w-4 h-4" />
+                        Kirim ke Konsultan
+                     </button>
+                  </div>
+               </div>
+            </div>
+
+            <div className="p-10 md:p-14 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-[3rem] md:rounded-[4rem] shadow-2xl relative overflow-hidden group/tax">
+               <div className="relative z-10 text-center">
+                  <p className="text-[11px] md:text-sm font-black text-indigo-100 uppercase tracking-[0.5em] mb-4">Besaran Pajak Terutang</p>
+                  <h4 className="text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter font-display drop-shadow-2xl">{formatCurrency(taxAmount)}</h4>
+                  <div className="mt-8 pt-8 border-t border-white/20">
+                     <p className="text-[11px] md:text-sm font-bold text-white/70 leading-relaxed mb-6">
+                        Pajak Terutang dihitung dari jumlah Peredaran Bruto dikalikan tarif PPh Final UMKM (0,5%).
+                     </p>
+                     <div className="flex bg-white/20 backdrop-blur-xl p-5 md:p-6 rounded-[2rem] border border-white/30 items-center justify-center gap-4">
+                        <QrCode className="w-8 h-8 text-white" />
+                        <div className="text-left">
+                           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Kode Billing Pajak</p>
+                           <p className="text-lg font-black text-white tracking-widest font-mono">MAP: 411128 KJS: 420</p>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+               <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-3xl group-hover/tax:scale-150 transition-transform duration-1000" />
+            </div>
+         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-        <div className="md:col-span-8 space-y-8">
-          {/* Main Calculation Bento */}
-          <div className="bg-slate-900 p-10 rounded-[2.5rem] border border-slate-800 text-white overflow-hidden relative shadow-2xl shadow-slate-900/10">
-            <div className="relative z-10">
-              <div className="flex items-center gap-4 mb-10">
-                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md">
-                   <Calculator className="w-6 h-6 text-emerald-400" />
-                </div>
-                <div>
-                  <h4 className="text-[10px] uppercase font-black tracking-widest text-slate-500">Estimasi Pajak</h4>
-                  <p className="text-sm font-bold text-slate-300">{months[selectedMonth]} {selectedYear}</p>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Pajak Terutang (0,5%)</p>
-                <h2 className="text-6xl font-black tracking-tighter text-emerald-400">{formatCurrency(pphFinal)}</h2>
-              </div>
-
-              <div className="mt-12 pt-10 border-t border-slate-800 grid grid-cols-2 gap-8">
-                <div>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-1">Total Omset</p>
-                  <p className="text-2xl font-black text-white">{formatCurrency(omset)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-1">Status</p>
-                  <div className="flex items-center gap-2 text-white">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-sm font-bold">Terhitung</span>
-                  </div>
-                </div>
-              </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-12">
+         {/* Checklist Section */}
+         <div className="xl:col-span-2 space-y-8">
+            <div className="flex items-center gap-3 mb-2 px-2">
+               <ShieldCheck className="w-6 h-6 text-indigo-600" />
+               <h3 className="text-2xl font-black text-slate-900 tracking-tighter font-display">Checklist Kepatuhan</h3>
             </div>
-            
-            <div className="absolute right-[-10%] bottom-[-10%] w-64 h-64 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none" />
-          </div>
 
-          {/* Compliance Card Bento */}
-          <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative z-10">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 flex items-center gap-3 mb-10">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500 stroke-[3]" />
-              Checklist Kepatuhan
-            </h3>
-            <div className="space-y-8">
-              <ComplianceStep 
-                num="01" 
-                title="Selesaikan Kode Billing" 
-                desc="Gunakan fitur SSE Pajak dengan kode MAP 411128 dan KJS 420 melalui DJP Online."
-                completed={checklist.step1}
-                onToggle={() => toggleStep('step1')}
-              />
-              <ComplianceStep 
-                num="02" 
-                title="Pembayaran (Deadline)" 
-                desc={`Lakukan setoran ke Kas Negara paling lambat ${paymentDeadline} melalui Bank Persepsi.`}
-                completed={checklist.step2}
-                onToggle={() => toggleStep('step2')}
-              />
-              <ComplianceStep 
-                num="03" 
-                title="Pelaporan SPT Masa" 
-                desc={`Input data pembayaran ke SPT Masa PPh Final UMKM paling lambat ${reportDeadline}.`}
-                completed={checklist.step3}
-                onToggle={() => toggleStep('step3')}
-              />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+               <ComplianceStep 
+                 num="01"
+                 title="Selesaikan Kode Billing"
+                 desc="Gunakan fitur SSE Pajak dengan kode MAP 411128 dan KJS 420 melalui DJP Online."
+                 checked={checklist.step1}
+                 onToggle={() => toggleStep('step1')}
+               />
+               <ComplianceStep 
+                 num="02"
+                 title="Pembayaran (Deadline)"
+                 desc="Lakukan setoran ke Kas Negara paling lambat 15/06/2026 melalui Bank Persepsi."
+                 checked={checklist.step2}
+                 onToggle={() => toggleStep('step2')}
+               />
+               <ComplianceStep 
+                 num="03"
+                 title="Pelaporan SPT Masa"
+                 desc="Input data pembayaran ke SPT Masa PPh Final UMKM paling lambat 20/06/2026."
+                 checked={checklist.step3}
+                 onToggle={() => toggleStep('step3')}
+               />
             </div>
-          </div>
-        </div>
 
-        <div className="md:col-span-4 space-y-6">
-          <div className="bg-amber-50 p-8 rounded-[2rem] border border-amber-100 text-amber-900 relative overflow-hidden group">
-            <div className="absolute -right-4 -top-4 text-6xl opacity-10 rotate-12 group-hover:rotate-0 transition-transform">⚠️</div>
-            <div className="flex items-center gap-2 mb-4">
-              <AlertCircle className="w-4 h-4 text-amber-600 stroke-[3]" />
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-800">Pembebasan Pajak</h4>
+            <div className="bg-white/60 backdrop-blur-md p-8 rounded-[2.5rem] border border-white shadow-xl flex items-start gap-5">
+               <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 shrink-0 shadow-sm shadow-amber-100/50">
+                  <Info className="w-6 h-6" />
+               </div>
+               <div className="space-y-4">
+                  <p className="text-sm font-black text-slate-900 tracking-tight leading-relaxed">Peredaran Bruto Tidak Kena Pajak</p>
+                  <p className="text-xs font-bold text-slate-500 leading-relaxed uppercase tracking-widest opacity-80">
+                    Sesuai UU HPP, jika peredaran bruto kumulatif Anda dalam 1 tahun pajak masih di bawah <span className="text-indigo-600 font-black">Rp 500juta</span>, maka Anda tidak dikenai PPh Final 0,5% untuk nominal tersebut.
+                  </p>
+               </div>
             </div>
-            <p className="text-xs leading-relaxed font-medium">
-              Wajib Pajak Orang Pribadi dengan omset di bawah <b>Rp 500.000.000</b> setahun tidak dikenakan PPh Final. Pastikan omset akumulatif Anda terpantau.
-            </p>
-          </div>
+         </div>
 
-          <div className="bg-indigo-50 p-8 rounded-[2rem] border border-indigo-100 text-indigo-900 relative overflow-hidden group">
-             <div className="absolute -right-4 -top-4 text-6xl opacity-10 rotate-12 group-hover:rotate-0 transition-transform">⚖️</div>
-            <div className="flex items-center gap-2 mb-4">
-              <Info className="w-4 h-4 text-indigo-600 stroke-[3]" />
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-800">Regulasi Terkait</h4>
+         {/* Regulation Side Area */}
+         <div className="space-y-6">
+            <div className="p-8 md:p-10 bg-white/60 backdrop-blur-md rounded-[2.5rem] border border-white shadow-xl">
+               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-6">Regulasi Terkait</h4>
+               <div className="space-y-6">
+                  <RegulationLink 
+                     title="PP RI No. 55 Tahun 2022"
+                     author="Peraturan Pemerintah"
+                     desc="Tentang penyesuaian tarif & ambang batas pajak UMKM di Indonesia."
+                  />
+                  <div className="h-px bg-slate-100" />
+                  <RegulationLink 
+                     title="Tutorial DJP Online"
+                     author="E-Filing Portal"
+                     desc="Panduan langkah demi langkah pengisian SPT masa secara daring."
+                  />
+               </div>
             </div>
-            <p className="text-[10px] leading-relaxed font-bold italic opacity-80">
-              "Peredaran bruto yang dijadikan objek pajak adalah seluruh penerimaan dari hasil penjualan barang/jasa dari usaha pokok."
-            </p>
-          </div>
-        </div>
+
+            <div className="p-8 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] text-white relative overflow-hidden group">
+               <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 relative z-10">Total Transaksi Dianalisis</p>
+               <h5 className="text-3xl font-black text-white tracking-tighter relative z-10 font-display">{transactions.length} Entri</h5>
+               <div className="absolute right-[-20px] bottom-[-20px] opacity-10 group-hover:scale-110 transition-transform">
+                  <TrendingUp className="w-24 h-24 stroke-[1]" />
+               </div>
+            </div>
+         </div>
       </div>
     </div>
   );
 }
 
-function ComplianceStep({ num, title, desc, completed, onToggle }: { 
-  num: string; 
-  title: string; 
-  desc: string; 
-  completed?: boolean;
-  onToggle: () => void;
-}) {
+function ComplianceStep({ num, title, desc, checked, onToggle }: { num: string, title: string, desc: string, checked: boolean, onToggle: () => void }) {
   return (
-    <div 
-      className={cn(
-        "flex gap-6 p-4 rounded-2xl transition-all cursor-pointer group",
-        completed ? "bg-emerald-50/50" : "hover:bg-slate-50"
-      )}
+    <motion.div 
+      whileHover={{ y: -5 }}
       onClick={onToggle}
+      className={cn(
+        "p-8 rounded-[2.5rem] border-2 transition-all cursor-pointer relative overflow-hidden group h-full flex flex-col",
+        checked ? "bg-emerald-50 border-emerald-100" : "bg-white border-slate-50"
+      )}
     >
-      <div className={cn(
-        "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all",
-        completed 
-          ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-200" 
-          : "bg-white border-slate-100 text-slate-300 group-hover:border-indigo-200 group-hover:text-indigo-400"
-      )}>
-        {completed ? <Check className="w-6 h-6 stroke-[3]" /> : <span className="text-lg font-black">{num}</span>}
+      <div className="flex items-center justify-between mb-6">
+         <span className={cn(
+           "text-[11px] font-black tracking-[0.25em] font-display",
+           checked ? "text-emerald-400" : "text-slate-200"
+         )}>{num}</span>
+         <div className={cn(
+           "w-10 h-10 rounded-2xl flex items-center justify-center transition-all shadow-md",
+           checked ? "bg-emerald-500 text-white shadow-emerald-200" : "bg-slate-50 text-slate-300 shadow-slate-100"
+         )}>
+           <Check className="w-5 h-5 stroke-[3]" />
+         </div>
       </div>
-      <div className="flex-1">
-        <h4 className={cn(
-          "text-sm font-black uppercase tracking-wider mb-1 transition-colors",
-          completed ? "text-emerald-900" : "text-slate-900"
-        )}>
-          {title}
-        </h4>
-        <p className={cn(
-          "text-xs leading-relaxed font-medium transition-colors",
-          completed ? "text-emerald-600/80" : "text-slate-500"
-        )}>
-          {desc}
-        </p>
-      </div>
-    </div>
+      <h5 className={cn(
+         "text-base font-black tracking-tight mb-3 transition-colors pr-4",
+         checked ? "text-emerald-900" : "text-slate-900"
+      )}>{title}</h5>
+      <p className={cn(
+        "text-[10px] font-bold leading-[1.6] uppercase tracking-widest opacity-60",
+        checked ? "text-emerald-700" : "text-slate-400"
+      )}>{desc}</p>
+      
+      {checked && (
+         <div className="absolute -left-4 -bottom-4 w-12 h-12 bg-emerald-100/50 rounded-full blur-xl" />
+      )}
+    </motion.div>
   );
+}
+
+function RegulationLink({ title, author, desc }: any) {
+   return (
+      <div className="group cursor-pointer">
+         <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{title}</p>
+            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 translate-x-0 group-hover:translate-x-1 transition-all" />
+         </div>
+         <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-2">{author}</p>
+         <p className="text-[10px] font-bold text-slate-400 leading-relaxed uppercase tracking-widest opacity-60">{desc}</p>
+      </div>
+   );
 }

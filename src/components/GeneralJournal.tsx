@@ -1,137 +1,222 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, orderBy, doc } from 'firebase/firestore';
-import { BookText, Download, Calendar } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { BookOpen, Download, Calendar, ArrowRight, Printer, Search, Filter, Hash, MoreHorizontal } from 'lucide-react';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Transaction, OperationType } from '../types';
 import { formatCurrency, handleFirestoreError, cn } from '../lib/utils';
+import { motion } from 'motion/react';
 
 export default function GeneralJournal() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [businessName, setBusinessName] = useState('Bisnis Saya');
-
-  const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (!auth.currentUser) return;
-    
-    // Get business name using doc lookup
-    const profileRef = doc(db, 'users', auth.currentUser.uid);
-    const unsubscribeProfile = onSnapshot(profileRef, (snap) => {
-      if (snap.exists()) {
-        setBusinessName(snap.data().businessName || 'Bisnis Saya');
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
-    });
-
-    const q = query(collection(db, 'transactions'), where('userId', '==', auth.currentUser.uid), orderBy('date', 'asc'));
-    const unsubscribeTransactions = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
-      setTransactions(data);
+    const q = query(
+      collection(db, 'transactions'), 
+      where('userId', '==', auth.currentUser.uid), 
+      orderBy('date', 'desc'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'transactions');
-    });
-
-    return () => {
-      unsubscribeProfile();
-      unsubscribeTransactions();
-    };
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'transactions'));
+    return () => unsubscribe();
   }, []);
 
-  const filtered = transactions.filter(t => {
-    const d = new Date(t.date);
-    return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
-  });
-
-  const exportToPDF = () => {
+  const downloadPDF = () => {
     const doc = new jsPDF();
-    const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-    const periodStr = `${lastDay} ${months[selectedMonth]} ${selectedYear}`;
-
-    doc.setFontSize(18);
-    doc.text(businessName.toUpperCase(), 105, 15, { align: 'center' });
+    
+    // Premium Dashboard style PDF
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 50, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(auth.currentUser?.displayName?.toUpperCase() || 'FINBUDDY AI', 105, 18, { align: 'center' });
+    
     doc.setFontSize(14);
-    doc.text('JURNAL UMUM', 105, 24, { align: 'center' });
+    doc.text('JURNAL UMUM', 105, 28, { align: 'center' });
+    
     doc.setFontSize(10);
-    doc.text(`Untuk Periode yang Berakhir pada ${periodStr}`, 105, 30, { align: 'center' });
-    doc.line(20, 35, 190, 35);
-
-    const body = filtered.map(t => [
-      t.date,
-      `${t.category}${t.customerName ? ` (${t.customerName})` : ''}`,
-      t.description || '-',
-      t.type === 'income' ? formatCurrency(t.amount) : '-',
-      t.type === 'expense' ? formatCurrency(t.amount) : '-'
-    ]);
+    doc.setFont('helvetica', 'normal');
+    const periodEnding = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    doc.text(`Periode yang berakhir pada ${periodEnding}`, 105, 38, { align: 'center' });
+    
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Wajib Pajak: ${auth.currentUser?.displayName || auth.currentUser?.email}`, 14, 60);
+    doc.text(`ID Entitas: ${auth.currentUser?.uid.substring(0, 12)}`, 14, 65);
 
     autoTable(doc, {
-      startY: 40,
-      head: [['Tanggal', 'Keterangan/Akun', 'Referensi/Ket', 'Debet (Masuk)', 'Kredit (Keluar)']],
-      body: body,
+      startY: 75,
+      head: [['Post Date', 'Ref ID', 'Account / Description', 'Debit (DR)', 'Credit (CR)']],
+      body: transactions.map(t => [
+        t.date,
+        t.id.slice(-6).toUpperCase(),
+        `${t.category.toUpperCase()}\n    ${t.description}`,
+        t.type === 'income' ? formatCurrency(t.amount) : '-',
+        t.type === 'expense' ? formatCurrency(t.amount) : '-'
+      ]),
       theme: 'grid',
-      headStyles: { fillColor: [79, 70, 229] },
+      headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      styles: { fontSize: 7, cellPadding: 3, font: 'helvetica' },
+      columnStyles: { 
+        3: { halign: 'right' },
+        4: { halign: 'right' }
+      },
     });
 
-    const totalDebet = filtered.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
-    const totalKredit = filtered.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
+    const totalIn = transactions.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
+    const totalOut = transactions.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
 
     const finalY = (doc as any).lastAutoTable.finalY + 10;
-    doc.setFont(undefined, 'bold');
-    doc.text(`TOTAL DEBET: ${formatCurrency(totalDebet)}`, 190, finalY, { align: 'right' });
-    doc.text(`TOTAL KREDIT: ${formatCurrency(totalKredit)}`, 190, finalY + 7, { align: 'right' });
+    doc.setFillColor(248, 250, 252);
+    doc.rect(14, finalY, 182, 10, 'F');
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.text('GRAND TOTAL (TRIAL BALANCE)', 20, finalY + 6.5);
+    doc.text(formatCurrency(totalIn), 140, finalY + 6.5, { align: 'right' });
+    doc.text(formatCurrency(totalOut), 190, finalY + 6.5, { align: 'right' });
 
-    doc.save(`Jurnal_Umum_${months[selectedMonth]}_${selectedYear}.pdf`);
+    doc.save(`FinBuddy_Journal_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
-  if (loading) return <div className="animate-pulse h-64 bg-slate-100 rounded-3xl" />;
+  const filtered = transactions.filter(t => 
+    t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    t.category.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) return (
+    <div className="p-20 text-center flex flex-col items-center gap-6">
+      <div className="w-12 h-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+      <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] animate-pulse">Syncing Operational Logs...</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-4">
-          <Calendar className="text-slate-400 w-5 h-5" />
-          <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="text-xs font-black uppercase tracking-widest bg-slate-50 rounded-xl px-4 py-2 outline-none">
-            {months.map((m, i) => <option key={m} value={i}>{m}</option>)}
-          </select>
-          <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="text-xs font-black uppercase tracking-widest bg-slate-50 rounded-xl px-4 py-2 outline-none">
-            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+    <div className="max-w-7xl mx-auto space-y-12">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 px-2">
+        <div className="space-y-4">
+           <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-rose-100 text-rose-600 rounded text-[9px] font-black uppercase tracking-wider">Accounting Standard</span>
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-black uppercase tracking-wider">Audited v2.0</span>
+           </div>
+           <div className="flex items-center gap-5">
+              <div className="w-16 h-16 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-slate-200 ring-8 ring-slate-50">
+                <BookOpen className="w-8 h-8 stroke-[1.5]" />
+              </div>
+              <div>
+                <h3 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter font-display leading-[0.9]">General Journal</h3>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-3">Rangkuman Kronologis Transaksi Bisnis</p>
+              </div>
+           </div>
         </div>
-        <button onClick={exportToPDF} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest cursor-pointer">
-          <Download className="w-4 h-4" /> Ekspor PDF
-        </button>
+
+        <div className="flex items-center gap-4">
+           <div className="relative group w-full sm:w-80">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 group-focus-within:text-rose-500 transition-colors" />
+              <input 
+                type="text" 
+                placeholder="Lookup entri jurnal..."
+                className="w-full pl-13 pr-6 py-4 bg-white border border-slate-100 rounded-[1.5rem] outline-none text-xs font-bold focus:ring-8 focus:ring-slate-50 transition-all placeholder:text-slate-300"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+           </div>
+           <button 
+             onClick={downloadPDF}
+             className="px-10 py-5 bg-slate-900 text-white hover:bg-slate-800 rounded-[1.5rem] shadow-xl hover:scale-[1.03] active:scale-[0.97] transition-all flex items-center justify-center gap-3 font-black uppercase tracking-widest text-[10px] shrink-0"
+           >
+             <Download className="w-4 h-4 text-rose-400" />
+             Ekspor PDF
+           </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+      <div className="bg-white rounded-[3.5rem] border border-slate-50 shadow-2xl overflow-hidden">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 font-black uppercase tracking-widest text-slate-400">
-                <th className="px-8 py-5">Tanggal</th>
-                <th className="px-8 py-5">Keterangan/Akun</th>
-                <th className="px-8 py-5">Debet</th>
-                <th className="px-8 py-5 text-right">Kredit</th>
+              <tr className="bg-slate-900/5 border-b border-white">
+                <th className="px-10 py-8 text-[10px] font-black uppercase tracking-widest text-slate-400">Date/Time</th>
+                <th className="px-10 py-8 text-[10px] font-black uppercase tracking-widest text-slate-400">Reference & Entity Description</th>
+                <th className="px-10 py-8 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Debit (Assets +)</th>
+                <th className="px-10 py-8 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Credit (Equity +)</th>
+                <th className="px-8 py-8 w-16"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50 font-medium">
-              {filtered.map((t) => (
-                <tr key={t.id} className="hover:bg-slate-50/50">
-                  <td className="px-8 py-4">{t.date}</td>
-                  <td className="px-8 py-4">
-                    <p className="font-bold">{t.category} {t.customerName && <span className="text-indigo-400 font-medium">({t.customerName})</span>}</p>
-                    <p className="text-[10px] text-slate-400">{t.description}</p>
+            <tbody className="divide-y divide-slate-100/50">
+              {filtered.map((t, idx) => (
+                <motion.tr 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: idx * 0.01 }}
+                  key={t.id} 
+                  className="group hover:bg-slate-50 transition-colors"
+                >
+                  <td className="px-10 py-7">
+                    <div className="space-y-1">
+                       <p className="text-sm font-black text-slate-900 font-mono tracking-tighter">
+                         {new Date(t.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
+                       </p>
+                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+                         {new Date(t.date).getFullYear()}
+                       </p>
+                    </div>
                   </td>
-                  <td className="px-8 py-4 text-emerald-600 font-bold">{t.type === 'income' ? formatCurrency(t.amount) : '-'}</td>
-                  <td className="px-8 py-4 text-rose-500 font-bold text-right">{t.type === 'expense' ? formatCurrency(t.amount) : '-'}</td>
-                </tr>
+                  <td className="px-10 py-7">
+                    <div className="space-y-2">
+                       <div className="flex items-center gap-3">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest",
+                            t.type === 'income' ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"
+                          )}>{t.category}</span>
+                          <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest flex items-center gap-1">
+                             <Hash className="w-2.5 h-2.5" /> {t.id.substring(0, 8).toUpperCase()}
+                          </span>
+                       </div>
+                       <p className="text-[13px] font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{t.description}</p>
+                    </div>
+                  </td>
+                  <td className="px-10 py-7 text-right">
+                    {t.type === 'income' ? (
+                       <span className="text-base font-black text-emerald-600 font-mono tracking-tighter">{formatCurrency(t.amount)}</span>
+                    ) : (
+                       <span className="text-slate-200">—</span>
+                    )}
+                  </td>
+                  <td className="px-10 py-7 text-right">
+                    {t.type === 'expense' ? (
+                       <span className="text-base font-black text-rose-500 font-mono tracking-tighter">{formatCurrency(t.amount)}</span>
+                    ) : (
+                       <span className="text-slate-200">—</span>
+                    )}
+                  </td>
+                  <td className="px-8 py-7 text-right">
+                     <button className="p-2 text-slate-200 hover:text-slate-400 transition-colors">
+                        <MoreHorizontal className="w-4 h-4" />
+                     </button>
+                  </td>
+                </motion.tr>
               ))}
             </tbody>
+            <tfoot>
+               <tr className="bg-slate-50/50">
+                  <td colSpan={2} className="px-10 py-8 text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">Grand Summary (Total Recorded)</td>
+                  <td className="px-10 py-8 text-right text-lg font-black text-slate-950 font-display tracking-tight">
+                     {formatCurrency(filtered.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0))}
+                  </td>
+                  <td className="px-10 py-8 text-right text-lg font-black text-slate-950 font-display tracking-tight">
+                     {formatCurrency(filtered.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0))}
+                  </td>
+                  <td></td>
+               </tr>
+            </tfoot>
           </table>
         </div>
       </div>
