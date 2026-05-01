@@ -25,10 +25,12 @@ export default function BalanceSheet() {
 
     const unsubscribeTrans = onSnapshot(query(
       collection(db, 'transactions'), 
-      where('userId', '==', uid),
-      where('date', '<=', endDate)
+      where('userId', '==', uid)
     ), (snap) => {
-      setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
+      const allTransactions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+      // Balance sheet is "as of" end of period
+      const filtered = allTransactions.filter(t => t.date <= endDate);
+      setTransactions(filtered);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'transactions'));
 
     const unsubscribeDebts = onSnapshot(query(collection(db, 'debts'), where('userId', '==', uid)), (snap) => {

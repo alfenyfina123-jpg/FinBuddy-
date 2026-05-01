@@ -261,7 +261,7 @@ export default function DebtManager() {
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-white/30 backdrop-blur-[100px]" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-white/70 backdrop-blur-3xl" />
             <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="relative w-full max-w-xl bg-white rounded-[3rem] shadow-2xl p-10 overflow-hidden">
                <div className="mb-10">
                   <h3 className="text-2xl font-black text-slate-900 tracking-tighter font-display">Baru: Catatan Kredit</h3>

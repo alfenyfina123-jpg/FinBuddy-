@@ -24,13 +24,17 @@ export default function GeneralLedger() {
     const q = query(
       collection(db, 'transactions'), 
       where('userId', '==', auth.currentUser.uid), 
-      where('date', '>=', startDate),
-      where('date', '<=', endDate),
       orderBy('date', 'asc'),
       orderBy('createdAt', 'asc')
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
+      const allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+      // Client-side filtering
+      const filtered = allTransactions.filter(t => {
+        const tDate = new Date(t.date);
+        return tDate.getMonth() === selectedMonth && tDate.getFullYear() === selectedYear;
+      });
+      setTransactions(filtered);
       setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'transactions'));
     return () => unsubscribe();

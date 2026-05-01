@@ -57,13 +57,13 @@ export default function TransactionList() {
            }
         }
         setIsScanning(false);
-        scanner.clear();
+        scanner.clear().catch(e => console.error("Failed to clear scanner on success", e));
       }, (error) => {
         // Error
       });
 
       return () => {
-        scanner.clear().catch(e => console.error("Failed to clear scanner", e));
+        scanner.clear().catch(e => console.error("Failed to clear scanner on cleanup", e));
       };
     }
   }, [isScanning]);
@@ -401,7 +401,7 @@ export default function TransactionList() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsModalOpen(false)}
-              className="absolute inset-0 bg-white/30 backdrop-blur-[100px]" 
+              className="absolute inset-0 bg-white/70 backdrop-blur-3xl" 
             />
             
             <motion.div
@@ -693,7 +693,7 @@ export default function TransactionList() {
                initial={{ opacity: 0 }}
                animate={{ opacity: 1 }}
                exit={{ opacity: 0 }}
-               className="absolute inset-0 bg-slate-900/90 backdrop-blur-2xl" 
+               className="absolute inset-0 bg-white/80 backdrop-blur-3xl" 
             />
             <motion.div
                initial={{ opacity: 0, scale: 0.9 }}
@@ -749,7 +749,7 @@ export default function TransactionList() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedInvoice(null)}
-              className="absolute inset-0 bg-white/30 backdrop-blur-[100px]" 
+              className="absolute inset-0 bg-white/70 backdrop-blur-3xl" 
             />
             
             <motion.div

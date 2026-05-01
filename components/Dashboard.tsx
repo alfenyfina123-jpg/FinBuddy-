@@ -25,14 +25,17 @@ export default function Dashboard({ setActiveTab }: { setActiveTab: (tab: any) =
     const q = query(
       collection(db, 'transactions'),
       where('userId', '==', auth.currentUser.uid),
-      where('date', '>=', startDate),
-      where('date', '<=', endDate),
       orderBy('date', 'desc')
     );
 
     const unsubscribeTrans = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
-      setTransactions(data);
+      const allData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+      // Client-side filtering
+      const filtered = allData.filter(t => {
+        const tDate = new Date(t.date);
+        return tDate.getMonth() === selectedMonth && tDate.getFullYear() === selectedYear;
+      });
+      setTransactions(filtered);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'transactions');
