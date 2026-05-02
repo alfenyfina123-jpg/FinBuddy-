@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import QRCode from 'qrcode';
 import { Plus, Search, Trash2, Filter, ShoppingBag, ArrowUpRight, ArrowDownRight, X, QrCode, CreditCard, Banknote, Check, Hash, Calendar, User as UserIcon, TrendingUp, TrendingDown, ReceiptText, Package, DollarSign, Calculator, ChevronRight, AlertCircle, Sparkles, Printer, Download, Share2, ShieldCheck, Mail, MapPin, Building, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -225,6 +228,163 @@ export default function TransactionList() {
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'transactions');
     }
+  };
+
+  const downloadInvoicePDF = async (t: Transaction) => {
+    const doc = new jsPDF();
+    
+    // Header colors
+    const primaryColor: [number, number, number] = t.type === 'income' ? [16, 185, 129] : [244, 63, 94]; // Emerald or Rose
+    const slate900: [number, number, number] = [15, 23, 42];
+    const slate400: [number, number, number] = [148, 163, 184];
+    const slate500: [number, number, number] = [100, 116, 139];
+    const slate50: [number, number, number] = [248, 250, 252];
+    
+    // Brand Section
+    // Business Icon Circle (Black)
+    doc.setFillColor(slate900[0], slate900[1], slate900[2]);
+    doc.roundedRect(20, 20, 12, 12, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(profile?.businessName?.[0]?.toUpperCase() || 'F', 26, 27.5, { align: 'center' });
+    
+    // Business Name
+    doc.setTextColor(slate900[0], slate900[1], slate900[2]);
+    doc.setFontSize(14);
+    doc.text(profile?.businessName || 'FINBUDDY MERCHANT', 36, 25);
+    doc.setFontSize(7);
+    doc.setTextColor(slate400[0], slate400[1], slate400[2]);
+    doc.text('DIGITAL MERCHANT IDENTITY', 36, 29);
+    
+    // Invoice Metadata (Top Right)
+    doc.setTextColor(slate400[0], slate400[1], slate400[2]);
+    doc.setFontSize(7);
+    doc.text('NOMOR INVOICE', 190, 22, { align: 'right' });
+    doc.setTextColor(slate900[0], slate900[1], slate900[2]);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(t.invoiceNo || 'N/A', 190, 27, { align: 'right' });
+    
+    // Status Badge
+    const bgColor = t.type === 'income' ? [209, 250, 229] : [255, 228, 230];
+    doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
+    doc.roundedRect(165, 32, 25, 6, 3, 3, 'F');
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFontSize(6);
+    doc.text(t.type === 'income' ? 'PENJUALAN' : 'PENGELUARAN', 177.5, 36.5, { align: 'center' });
+    
+    // Separator
+    doc.setDrawColor(241, 245, 249);
+    doc.line(20, 50, 190, 50);
+    
+    // Metadata Grid
+    const metadataY = 60;
+    doc.setTextColor(slate400[0], slate400[1], slate400[2]);
+    doc.setFontSize(7);
+    doc.text('TANGGAL', 20, metadataY);
+    doc.text('METODE BAYAR', 100, metadataY);
+    
+    doc.setTextColor(slate900[0], slate900[1], slate900[2]);
+    doc.setFontSize(9);
+    doc.text(new Date(t.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), 20, metadataY + 5);
+    doc.text(t.paymentMethod.toUpperCase(), 100, metadataY + 5);
+    
+    const metadataY2 = 80;
+    doc.setTextColor(slate400[0], slate400[1], slate400[2]);
+    doc.setFontSize(7);
+    doc.text('CUSTOMER/ENTITAS', 20, metadataY2);
+    doc.text('PETUGAS KASIR', 100, metadataY2);
+    
+    doc.setTextColor(slate900[0], slate900[1], slate900[2]);
+    doc.setFontSize(9);
+    doc.text(t.customerName || 'Pelanggan Umum', 20, metadataY2 + 5);
+    doc.text(profile?.directorName || 'Admin FinBuddy', 100, metadataY2 + 5);
+    
+    // Table
+    autoTable(doc, {
+      startY: 100,
+      head: [['DESKRIPSI LAYANAN/PRODUK', 'SUBTOTAL']],
+      body: [[
+        { content: `${t.description}\n${t.category.toUpperCase()}`, styles: { fontStyle: 'bold' } },
+        { content: formatCurrency(t.amount), styles: { halign: 'right', fontStyle: 'bold' } }
+      ]],
+      theme: 'plain',
+      styles: { fontSize: 9, cellPadding: 8 },
+      headStyles: { 
+        fillColor: [248, 250, 252], 
+        textColor: slate400, 
+        fontSize: 7, 
+        fontStyle: 'bold'
+      },
+      columnStyles: {
+        1: { cellWidth: 50 }
+      }
+    });
+    
+    // Total
+    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    doc.setTextColor(slate400[0], slate400[1], slate400[2]);
+    doc.setFontSize(8);
+    doc.text('TOTAL TAGIHAN', 40, finalY);
+    doc.setTextColor(slate900[0], slate900[1], slate900[2]);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatCurrency(t.amount), 190, finalY, { align: 'right' });
+    
+    // Success Badge
+    doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
+    doc.roundedRect(155, finalY + 5, 35, 7, 3, 3, 'F');
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFontSize(7);
+    doc.text('LUNAS / BERHASIL', 172.5, finalY + 10, { align: 'center' });
+    
+    // Footer Separator
+    doc.setDrawColor(241, 245, 249);
+    doc.line(20, finalY + 30, 190, finalY + 30);
+    
+    // QR Code Section
+    try {
+      const qrDataUrl = await QRCode.toDataURL(`https://finbuddy.app/verify/${t.id}`, {
+        margin: 1,
+        width: 100,
+        color: {
+          dark: '#0f172a',
+          light: '#ffffff'
+        }
+      });
+      
+      // QR Box
+      doc.setDrawColor(241, 245, 249);
+      doc.roundedRect(20, finalY + 45, 35, 35, 5, 5, 'S');
+      doc.addImage(qrDataUrl, 'PNG', 22.5, finalY + 47.5, 30, 30);
+      
+      // Verification Text
+      doc.setTextColor(slate400[0], slate400[1], slate400[2]);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.text('VERIFICATION', 60, finalY + 50);
+      doc.text('LINK', 60, finalY + 53);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(slate500[0], slate500[1], slate500[2]);
+      doc.text('Scan untuk memverifikasi', 60, finalY + 58);
+      doc.text('keaslian dokumen ini', 60, finalY + 61);
+      doc.text('secara digital.', 60, finalY + 64);
+      
+      // Thanks Text
+      doc.setTextColor(slate400[0], slate400[1], slate400[2]);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TERIMA KASIH ATAS', 190, finalY + 65, { align: 'right' });
+      doc.text('KERJA SAMA ANDA', 190, finalY + 69, { align: 'right' });
+
+    } catch (err) {
+      console.error('QR Error:', err);
+    }
+    
+    doc.save(`Invoice_${t.invoiceNo?.replace(/\//g, '_') || t.id}.pdf`);
   };
 
   const filteredTransactions = transactions.filter(t => {
@@ -915,10 +1075,16 @@ export default function TransactionList() {
               </div>
 
               <div className="p-8 border-t border-slate-50 flex items-center justify-center gap-4 shrink-0">
-                 <button className="flex-1 flex items-center justify-center gap-3 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-indigo-100 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                 <button 
+                   onClick={() => selectedInvoice && downloadInvoicePDF(selectedInvoice)}
+                   className="flex-1 flex items-center justify-center gap-3 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-indigo-100 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                 >
                     <Printer className="w-4 h-4" /> Print PDF
                  </button>
-                 <button className="flex-1 flex items-center justify-center gap-3 px-8 py-4 bg-white border-2 border-slate-50 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all">
+                 <button 
+                   onClick={() => selectedInvoice && alert(`Link Invoice: https://finbuddy.app/verify/${selectedInvoice.id}`)}
+                   className="flex-1 flex items-center justify-center gap-3 px-8 py-4 bg-white border-2 border-slate-50 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all"
+                 >
                     <Share2 className="w-4 h-4" /> Share
                  </button>
               </div>
