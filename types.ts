@@ -21,10 +21,12 @@ export interface UserProfile {
   email: string;
   displayName: string;
   businessName?: string;
+  businessType?: string;
   directorName?: string;
   address?: string;
   npwp?: string;
   qrisPayload?: string;
+  operationalDate?: string; // yyyy-mm-dd
   autoGeneratePdfLedger?: boolean;
   thermalPrinterOptimization?: boolean;
   createdAt: any;

@@ -73,13 +73,20 @@ export default function TransactionList() {
 
     const q = query(
       collection(db, 'transactions'),
-      where('userId', '==', auth.currentUser.uid),
-      orderBy('date', 'desc'),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', auth.currentUser.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
+      const allData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+      // Client-side sorting
+      const sorted = [...allData].sort((a, b) => {
+        const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (dateDiff !== 0) return dateDiff;
+        const aTime = a.createdAt?.seconds || 0;
+        const bTime = b.createdAt?.seconds || 0;
+        return bTime - aTime;
+      });
+      setTransactions(sorted);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'transactions');

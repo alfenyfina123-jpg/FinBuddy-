@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { BookOpen, Download, Calendar, ArrowRight, Printer, Search, Filter, Hash, MoreHorizontal } from 'lucide-react';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, doc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { Transaction, OperationType } from '../types';
+import { Transaction, OperationType, UserProfile } from '../types';
 import { formatCurrency, handleFirestoreError, cn } from '../lib/utils';
 import { motion } from 'motion/react';
 
 export default function GeneralJournal() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,21 +24,36 @@ export default function GeneralJournal() {
 
     const q = query(
       collection(db, 'transactions'), 
-      where('userId', '==', auth.currentUser.uid), 
-      orderBy('date', 'desc'),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', auth.currentUser.uid)
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
-      // Client-side filtering for month/year to avoid composite index requirement
-      const filtered = allTransactions.filter(t => {
+      
+      // Client-side sorting & filtering
+      const sorted = [...allTransactions].sort((a, b) => {
+        const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (dateDiff !== 0) return dateDiff;
+        // Fallback to createdAt if dates are same
+        const aTime = a.createdAt?.seconds || 0;
+        const bTime = b.createdAt?.seconds || 0;
+        return bTime - aTime;
+      });
+
+      const filtered = sorted.filter(t => {
         const tDate = new Date(t.date);
         return tDate.getMonth() === selectedMonth && tDate.getFullYear() === selectedYear;
       });
       setTransactions(filtered);
       setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'transactions'));
-    return () => unsubscribe();
+    const unsubscribeProfile = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
+      if (snap.exists()) setProfile(snap.data() as UserProfile);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeProfile();
+    };
   }, [selectedMonth, selectedYear]);
 
   const downloadPDF = () => {
@@ -50,7 +66,7 @@ export default function GeneralJournal() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text(auth.currentUser?.displayName?.toUpperCase() || 'FINBUDDY AI', 105, 18, { align: 'center' });
+    doc.text(profile?.businessName?.toUpperCase() || auth.currentUser?.displayName?.toUpperCase() || 'FINBUDDY AI', 105, 18, { align: 'center' });
     
     doc.setFontSize(14);
     doc.text('JURNAL UMUM', 105, 28, { align: 'center' });
@@ -151,7 +167,9 @@ export default function GeneralJournal() {
                 <BookOpen className="w-8 h-8 stroke-[1.5]" />
               </div>
               <div>
-                <h3 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter font-display leading-[0.9]">General Journal</h3>
+                <h3 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter font-display leading-[0.9]">
+                  {profile?.businessName || 'General Journal'}
+                </h3>
                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-3">Rangkuman Kronologis Transaksi Bisnis</p>
               </div>
            </div>

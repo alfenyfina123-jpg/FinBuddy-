@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { Calculator, AlertCircle, FileText, CheckCircle2, TrendingUp, Info, ChevronRight, Download, Send, Calendar, ShieldCheck, Sparkles, Clock, QrCode, Check, Building, Printer, UserCheck, ShieldAlert } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { db, auth } from '../lib/firebase';
@@ -32,12 +32,17 @@ export default function TaxReport() {
       collection(db, 'transactions'),
       where('userId', '==', auth.currentUser.uid),
       where('type', '==', 'income'),
-      where('date', '>=', startDate),
-      where('date', '<=', endDate)
+      orderBy('date', 'desc')
     );
 
     const unsubscribeTrans = onSnapshot(q, (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
+      const allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+      // Client-side filtering for month/year
+      const filtered = allTransactions.filter(t => {
+        const tDate = new Date(t.date);
+        return tDate.getMonth() === selectedMonth && tDate.getFullYear() === selectedYear;
+      });
+      setTransactions(filtered);
       setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'transactions'));
 

@@ -103,6 +103,25 @@ export default function Settings() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Jenis Bidang Usaha</label>
+                  <input 
+                    type="text" 
+                    placeholder="Contoh: Kuliner, Retail, Jasa"
+                    className="w-full px-6 py-4 bg-white/50 border-2 border-slate-50 focus:border-indigo-100 rounded-2xl outline-none transition-all font-bold text-sm"
+                    value={profile.businessType || ''}
+                    onChange={(e) => setProfile({ ...profile, businessType: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Tanggal Mulai Operasional</label>
+                  <input 
+                    type="date" 
+                    className="w-full px-6 py-4 bg-white/50 border-2 border-slate-50 focus:border-indigo-100 rounded-2xl outline-none transition-all font-bold text-sm"
+                    value={profile.operationalDate || ''}
+                    onChange={(e) => setProfile({ ...profile, operationalDate: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Direktur / Penanggung Jawab</label>
                   <input 
                     type="text" 
