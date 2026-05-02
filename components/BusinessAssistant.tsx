@@ -38,37 +38,41 @@ export default function BusinessAssistant() {
 
     try {
       // @ts-ignore - handled by build system or env
-      const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : '');
+      const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
       
       if (!apiKey || apiKey === 'undefined') {
-        throw new Error("Assistant AI FinBuddy membutuhkan API Key. Jika Anda mendeploy sendiri ke Vercel, harap tambahkan GEMINI_API_KEY di Environment Variables.");
+        throw new Error("Assistant AI FinBuddy membutuhkan API Key. Jika Anda menggunakan Vercel, pastikan sudah menambahkan GEMINI_API_KEY di Environment Variables.");
       }
       const ai = new GoogleGenAI({ apiKey });
 
       // Gather some context about the business
       let businessContext = '';
       if (auth.currentUser) {
-        const transSnap = await getDocs(query(
-          collection(db, 'transactions'),
-          where('userId', '==', auth.currentUser.uid),
-          orderBy('date', 'desc'),
-          limit(20)
-        ));
-        const lastTrans = transSnap.docs.map(d => d.data() as Transaction);
-        
-        const prodSnap = await getDocs(query(
-          collection(db, 'products'),
-          where('userId', '==', auth.currentUser.uid),
-          limit(20)
-        ));
-        const prods = prodSnap.docs.map(d => d.data() as Product);
+        try {
+          const transSnap = await getDocs(query(
+            collection(db, 'transactions'),
+            where('userId', '==', auth.currentUser.uid),
+            orderBy('date', 'desc'),
+            limit(20)
+          ));
+          const lastTrans = transSnap.docs.map(d => d.data() as Transaction);
+          
+          const prodSnap = await getDocs(query(
+            collection(db, 'products'),
+            where('userId', '==', auth.currentUser.uid),
+            limit(20)
+          ));
+          const prods = prodSnap.docs.map(d => d.data() as Product);
 
-        businessContext = `
-          Context Bisnis Saat Ini:
-          - Jumlah Transaksi Terakhir: ${lastTrans.length}
-          - Contoh Produk: ${prods.slice(0, 3).map(p => p.name).join(', ')}
-          - Ringkasan Terakhir: ${lastTrans.slice(0, 5).map(t => `${t.description}: ${formatCurrency(t.amount)}`).join('; ')}
-        `;
+          businessContext = `
+            Context Bisnis Saat Ini:
+            - Jumlah Transaksi Terakhir: ${lastTrans.length}
+            - Contoh Produk: ${prods.slice(0, 3).map(p => p.name).join(', ')}
+            - Ringkasan Terakhir: ${lastTrans.slice(0, 5).map(t => `${t.description}: ${formatCurrency(t.amount)}`).join('; ')}
+          `;
+        } catch (ctxError) {
+          console.warn("Failed to gather business context:", ctxError);
+        }
       }
 
       const response = await ai.models.generateContent({
@@ -91,9 +95,10 @@ export default function BusinessAssistant() {
 
       const aiText = response.text || "Maaf, saya sedang mengalami kendala teknis.";
       setMessages(prev => [...prev, { role: 'assistant', content: aiText }]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Error:", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Gagal menghubungi asisten. Pastikan koneksi internet stabil.' }]);
+      const errorMessage = error.message || 'Gagal menghubungi asisten.';
+      setMessages(prev => [...prev, { role: 'assistant', content: `**Error:** ${errorMessage}\n\nPastikan koneksi internet stabil dan API Key sudah dikonfigurasi dengan benar di server.` }]);
     } finally {
       setIsTyping(false);
     }
