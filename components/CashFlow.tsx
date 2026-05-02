@@ -63,7 +63,7 @@ export default function CashFlow() {
     doc.text(`Periode: ${currentPeriod}`, 105, 38, { align: 'center' });
     
     doc.setTextColor(150, 150, 150);
-    doc.text(`Wajib Pajak: ${auth.currentUser?.displayName || auth.currentUser?.email}`, 14, 60);
+    // Removed Wajib Pajak line
 
     autoTable(doc, {
       startY: 60,

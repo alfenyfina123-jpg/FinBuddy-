@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { Calculator, AlertCircle, FileText, CheckCircle2, TrendingUp, Info, ChevronRight, Download, Send, Calendar, ShieldCheck, Sparkles, Clock, QrCode, Check, Building, Printer, UserCheck, ShieldAlert } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { db, auth } from '../lib/firebase';
 import { Transaction, OperationType, UserProfile } from '../types';
 import { formatCurrency, handleFirestoreError, cn } from '../lib/utils';
@@ -86,64 +87,118 @@ export default function TaxReport() {
 
   const downloadPDF = () => {
     const doc = new jsPDF();
-    doc.setFontSize(16);
+    
+    // Header Color Bar
+    doc.setFillColor(15, 23, 42); // Blue Slate 900
+    doc.rect(0, 0, 210, 40, 'F');
+    
+    // Header Text
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
-    doc.text('DAFTAR JUMLAH PEREDARAN BRUTO UMKM', 105, 20, { align: 'center' });
+    doc.text('LAPORAN PAJAK UMKM', 14, 20);
+    
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text('(Berdasarkan Ketentuan PP Nomor 55 Tahun 2022)', 105, 26, { align: 'center' });
+    doc.setTextColor(200, 200, 200);
+    doc.text('REKAPITULASI PEREDARAN BRUTO - PP 55 TAHUN 2022', 14, 28);
     
-    doc.setFontSize(11);
-    doc.text(`Nama Wajib Pajak  : ${profile?.businessName || profile?.displayName || 'N/A'}`, 14, 45);
-    doc.text(`NPWP              : ${profile?.npwp || 'Belum Diatur'}`, 14, 52);
-    doc.text(`Masa Pajak        : ${currentPeriod}`, 14, 59);
-
-    doc.line(14, 65, 196, 65);
-
-    let y = 75;
-    doc.setFontSize(10);
+    // Reset Text Color
+    doc.setTextColor(15, 23, 42);
+    
+    // Business Info Box
+    doc.setFillColor(248, 250, 252); // Slate 50
+    doc.roundedRect(14, 45, 182, 35, 3, 3, 'F');
+    
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text('Tanggal Transaksi', 14, y);
-    doc.text('Peredaran Bruto (Rp)', 196, y, { align: 'right' });
-    
+    doc.text('DATA WAJIB PAJAK', 20, 52);
     doc.setFont('helvetica', 'normal');
-    y += 10;
-    sortedDates.forEach((date) => {
-       if (y > 250) { doc.addPage(); y = 20; }
-       doc.text(new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }), 14, y);
-       doc.text(formatCurrency(dailySummary[date]).replace('Rp ', ''), 196, y, { align: 'right' });
-       y += 8;
+    doc.text(`NAMA USAHA : ${profile?.businessName || profile?.displayName || 'N/A'}`, 20, 60);
+    doc.text(`NPWP       : ${profile?.npwp || 'Belum Diatur'}`, 20, 66);
+    doc.text(`MASA PAJAK : ${currentPeriod}`, 20, 72);
+
+    // Summary Box
+    doc.setFillColor(79, 70, 229); // Indigo 600
+    doc.roundedRect(140, 52, 50, 22, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PAJAK TERUTANG', 145, 58);
+    doc.setFontSize(12);
+    doc.text(formatCurrency(taxAmount), 145, 68);
+
+    doc.setTextColor(15, 23, 42);
+    
+    // Detailed Table
+    const tableData = sortedDates.map(date => [
+      new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }),
+      formatCurrency(dailySummary[date]).replace('Rp ', '')
+    ]);
+
+    autoTable(doc, {
+      startY: 90,
+      head: [['TANGGAL TRANSAKSI', 'PEREDARAN BRUTO (IDR)']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        halign: 'left'
+      },
+      columnStyles: {
+        1: { halign: 'right' }
+      },
+      styles: {
+        fontSize: 9,
+        cellPadding: 5
+      }
     });
 
-    doc.line(14, y, 196, y);
-    y += 10;
-    doc.setFont('helvetica', 'bold');
-    doc.text('JUMLAH TOTAL PEREDARAN BRUTO', 14, y);
-    doc.text(formatCurrency(totalBruto), 196, y, { align: 'right' });
+    const finalY = (doc as any).lastAutoTable.finalY + 15;
     
-    y += 8;
-    doc.text('PPh FINAL TERUTANG (0,5%)', 14, y);
-    doc.text(formatCurrency(taxAmount), 196, y, { align: 'right' });
+    // Total Summary Below Table
+    doc.setFillColor(248, 250, 252);
+    doc.rect(14, finalY, 182, 20, 'F');
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL PEREDARAN BRUTO BULAN INI', 20, finalY + 12);
+    doc.text(formatCurrency(totalBruto), 190, finalY + 12, { align: 'right' });
 
-    // Threshold warning
+    let y = finalY + 35;
+    
+    // Threshold warning if eligible
     if (totalBruto < 500000000) {
-       y += 15;
-       doc.setFontSize(9);
+       doc.setFontSize(8);
        doc.setFont('helvetica', 'italic');
+       doc.setTextColor(100, 100, 100);
        doc.text('* Menunggu kumulatif ambang batas Rp 500jt (PTKP) sesuai UU HPP.', 14, y);
+       y += 10;
     }
 
-    // Signature
-    y += 25;
-    if (y > 260) { doc.addPage(); y = 30; }
-    doc.setFontSize(10);
+    // Signature Area
+    if (y > 250) { doc.addPage(); y = 30; }
+    
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(`${profile?.address?.split(',')[0] || 'Indonesia'}, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, 140, y);
-    y += 10;
+    doc.setTextColor(15, 23, 42);
+    const location = profile?.address?.split(',')[0] || 'Indonesia';
+    const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    
+    doc.text(`${location}, ${today}`, 140, y);
+    y += 8;
     doc.text('Wajib Pajak / Pengusaha,', 140, y);
     y += 25;
     doc.setFont('helvetica', 'bold');
     doc.text(`( ${profile?.directorName || profile?.displayName || '..........................'} )`, 140, y);
+
+    // Footer
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(180, 180, 180);
+    doc.text('Laporan ini dihasilkan secara otomatis oleh Asisten Bisnis Pintar (AIS)', 105, 285, { align: 'center' });
 
     doc.save(`Laporan_Pajak_${currentPeriod.replace(' ', '_')}.pdf`);
   };

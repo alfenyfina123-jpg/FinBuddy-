@@ -74,8 +74,7 @@ export default function ProfitLossReport() {
     doc.text(`Periode: ${currentPeriod}`, 105, 38, { align: 'center' });
     
     doc.setTextColor(100, 100, 100);
-    doc.text(`Wajib Pajak: ${auth.currentUser?.displayName || auth.currentUser?.email}`, 14, 60);
-    doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')}`, 14, 66);
+    doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')}`, 14, 60); // Moved up to 60
 
     autoTable(doc, {
       startY: 70,

@@ -80,8 +80,7 @@ export default function BalanceSheet() {
     doc.text(`Per Tanggal: 31 ${currentPeriod}`, 105, 38, { align: 'center' });
     
     doc.setTextColor(150, 150, 150);
-    doc.text(`Wajib Pajak: ${auth.currentUser?.displayName || auth.currentUser?.email}`, 14, 60);
-    doc.text(`Dicetak pada: ${new Date().toLocaleString('id-ID')}`, 14, 66);
+    doc.text(`Dicetak pada: ${new Date().toLocaleString('id-ID')}`, 14, 60); // Moved up to 60
 
     autoTable(doc, {
       startY: 75,

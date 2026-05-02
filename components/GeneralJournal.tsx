@@ -77,8 +77,7 @@ export default function GeneralJournal() {
     doc.text(`Periode: ${periodValue}`, 105, 38, { align: 'center' });
     
     doc.setTextColor(150, 150, 150);
-    doc.text(`Wajib Pajak: ${auth.currentUser?.displayName || auth.currentUser?.email}`, 14, 60);
-    doc.text(`ID Entitas: ${auth.currentUser?.uid.substring(0, 12)}`, 14, 65);
+    doc.text(`ID Entitas: ${auth.currentUser?.uid.substring(0, 12)}`, 14, 60); // Changed y coordinate from 65 to 60
 
     autoTable(doc, {
       startY: 75,
