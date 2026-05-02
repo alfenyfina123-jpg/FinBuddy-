@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, query, collection, where, onSnapshot } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   LayoutDashboard, 
@@ -46,7 +46,26 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'analysis' | 'tax' | 'profitLoss' | 'journal' | 'ledger' | 'balanceSheet' | 'cashFlow' | 'settings' | 'aiAnalytics' | 'aiAssistant' | 'inventory' | 'debts'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [urgentCount, setUrgentCount] = useState(0);
   const mainRef = React.useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const q = query(collection(db, 'debts'), where('userId', '==', auth.currentUser.uid), where('status', '==', 'pending'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const debts = snapshot.docs.map(doc => doc.data());
+      const now = new Date();
+      const threeDaysFromNow = new Date();
+      threeDaysFromNow.setDate(now.getDate() + 3);
+
+      const count = debts.filter((d: any) => {
+        const dueDate = new Date(d.dueDate);
+        return dueDate <= threeDaysFromNow;
+      }).length;
+      setUrgentCount(count);
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   useEffect(() => {
     if (mainRef.current) {
@@ -115,7 +134,7 @@ export default function App() {
     { id: 'tax', label: 'Laporan Pajak', icon: Calculator, group: 'Analitik', color: 'text-amber-500', bg: 'bg-amber-50' },
     
     { id: 'inventory', label: 'Inventori Stok', icon: Package, group: 'Operasional', color: 'text-emerald-500', bg: 'bg-emerald-50' },
-    { id: 'debts', label: 'Catatan Hutang', icon: Wallet, group: 'Operasional', color: 'text-emerald-500', bg: 'bg-emerald-50' },
+    { id: 'debts', label: 'Catatan Utang', icon: Wallet, group: 'Operasional', color: 'text-emerald-500', bg: 'bg-emerald-50' },
 
     { id: 'aiAnalytics', label: 'Analitik Cerdas', icon: Sparkles, group: 'Kecerdasan Buatan (AI)', color: 'text-violet-500', bg: 'bg-violet-50' },
     { id: 'aiAssistant', label: 'Asisten Bisnis', icon: Bot, group: 'Kecerdasan Buatan (AI)', color: 'text-violet-500', bg: 'bg-violet-50' },
@@ -214,6 +233,11 @@ export default function App() {
                     >
                       <Icon className={cn("w-5 h-5 md:w-6 md:h-6", isActive ? tab.color : "text-slate-400 group-hover:text-slate-900 transition-colors")} />
                       <span className="font-bold tracking-tight">{tab.label}</span>
+                      {tab.id === 'debts' && urgentCount > 0 && (
+                        <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-4 ring-white group-hover:ring-slate-100 transition-all">
+                          {urgentCount}
+                        </span>
+                      )}
                     </button>
                   );
                 })}

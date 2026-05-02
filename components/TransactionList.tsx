@@ -149,7 +149,8 @@ export default function TransactionList() {
         const prodSnap = await getDoc(productRef);
         if (prodSnap.exists()) {
            await updateDoc(productRef, {
-             stock: Math.max(0, (prodSnap.data().stock || 0) - 1)
+             stock: Math.max(0, (prodSnap.data().stock || 0) - 1),
+             updatedAt: serverTimestamp()
            });
         }
       }
@@ -183,7 +184,8 @@ export default function TransactionList() {
         const prodSnap = await getDoc(productRef);
         if (prodSnap.exists()) {
            await updateDoc(productRef, {
-             stock: Math.max(0, (prodSnap.data().stock || 0) - 1)
+             stock: Math.max(0, (prodSnap.data().stock || 0) - 1),
+             updatedAt: serverTimestamp()
            });
         }
       }
@@ -212,7 +214,7 @@ export default function TransactionList() {
   };
 
   const deleteTransaction = async (id: string, trans: Transaction) => {
-    if (!confirm('Hapus transaksi ini?')) return;
+    if (!window.confirm('Hapus transaksi ini?')) return;
     try {
       await deleteDoc(doc(db, 'transactions', id));
       
@@ -225,7 +227,10 @@ export default function TransactionList() {
           });
         }
       }
+      alert('Transaksi berhasil dihapus.');
     } catch (error) {
+      console.error("Delete Transaction Error:", error);
+      alert(`Gagal menghapus transaksi: ${error instanceof Error ? error.message : 'Terjadi kesalahan sistem'}`);
       handleFirestoreError(error, OperationType.DELETE, 'transactions');
     }
   };
@@ -535,8 +540,12 @@ export default function TransactionList() {
                             <ReceiptText className="w-5 h-5" />
                           </button>
                           <button 
-                            onClick={() => deleteTransaction(t.id, t)}
-                            className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteTransaction(t.id, t);
+                            }}
+                            className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
+                            title="Hapus Transaksi"
                           >
                             <Trash2 className="w-5 h-5" />
                           </button>

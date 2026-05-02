@@ -68,18 +68,19 @@ service cloud.firestore {
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
 
       function isValidTransaction(t) {
-        return t.keys().hasAll(['userId', 'type', 'category', 'amount', 'date', 'createdAt'])
-          && t.userId == request.auth.uid
-          && t.type in ['income', 'expense']
-          && t.category is string && t.category.size() <= 100
-          && t.amount is number && t.amount >= 0
-          && t.date is string && t.date.size() <= 20
+        return (t.get('userId', '') == request.auth.uid)
+          && (t.get('type', '') in ['income', 'expense'])
+          && (t.get('category', '') is string && t.get('category', '').size() <= 100)
+          && (t.get('amount', 0) is number && t.get('amount', 0) >= 0)
+          && (t.get('date', '') is string)
+          && (t.get('createdAt', request.time) is timestamp)
           && (t.get('description', '') is string && t.get('description', '').size() <= 1000)
           && (t.get('customerName', '') is string && t.get('customerName', '').size() <= 200)
           && (t.get('paymentMethod', 'cash') in ['cash', 'qris', 'credit'])
           && (t.get('productName', '') is string && t.get('productName', '').size() <= 200)
           && (t.get('hpp', 0) is number)
-          && (request.method == 'create' ? t.createdAt == request.time : true);
+          && (t.get('invoiceNo', '') is string)
+          && (t.get('updatedAt', request.time) is timestamp);
       }
     }
 
@@ -94,16 +95,12 @@ service cloud.firestore {
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
 
       function isValidProduct(p) {
-        return p.keys().hasAll(['userId', 'name', 'price', 'hpp', 'stock', 'createdAt'])
-          && p.userId == request.auth.uid
-          && p.name is string && p.name.size() <= 200
-          && (p.get('code', '') is string && p.get('code', '').size() <= 100)
-          && (p.get('category', '') is string && p.get('category', '').size() <= 100)
-          && p.price is number && p.price >= 0
-          && p.hpp is number && p.hpp >= 0
-          && p.stock is number
-          && (p.get('unit', 'pcs') is string && p.get('unit', 'pcs').size() <= 50)
-          && (request.method == 'create' ? p.createdAt == request.time : true);
+        return (p.get('userId', '') == request.auth.uid)
+          && (p.get('name', '') is string && p.get('name', '').size() <= 200)
+          && (p.get('price', 0) is number && p.get('price', 0) >= 0)
+          && (p.get('hpp', 0) is number && p.get('hpp', 0) >= 0)
+          && (p.get('stock', 0) is number)
+          && (p.get('createdAt', request.time) is timestamp);
       }
     }
 
@@ -118,17 +115,14 @@ service cloud.firestore {
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
 
       function isValidDebt(d) {
-        return d.keys().hasAll(['userId', 'type', 'contactName', 'totalAmount', 'remainingAmount', 'status', 'createdAt'])
-          && d.userId == request.auth.uid
-          && (d.get('transactionId', '') is string)
-          && d.type in ['payable', 'receivable']
-          && d.contactName is string && d.contactName.size() <= 200
-          && d.totalAmount is number && d.totalAmount >= 0
-          && d.remainingAmount is number && d.remainingAmount >= 0
-          && d.status in ['pending', 'partially_paid', 'paid']
-          && (d.get('dueDate', '') is string)
-          && (d.get('notes', '') is string)
-          && (request.method == 'create' ? d.createdAt == request.time : true);
+        return (d.get('userId', '') == request.auth.uid)
+          && (d.get('type', '') in ['payable', 'receivable'])
+          && (d.get('contactName', '') is string && d.get('contactName', '').size() <= 200)
+          && (d.get('totalAmount', 0) is number && d.get('totalAmount', 0) >= 0)
+          && (d.get('remainingAmount', 0) is number && d.get('remainingAmount', 0) >= 0)
+          && (d.get('status', 'pending') in ['pending', 'partially_paid', 'paid'])
+          && (d.get('createdAt', request.time) is timestamp)
+          && (d.get('updatedAt', request.time) is timestamp);
       }
     }
 

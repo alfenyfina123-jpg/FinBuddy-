@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, orderBy, doc, limit, getDoc } from 'firebase/firestore';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { AlertCircle, TrendingUp, TrendingDown, Wallet, ShoppingBag, Bell, ReceiptText, Calculator, QrCode, CreditCard, Banknote, ArrowUpRight, ArrowDownRight, Sparkles, Package, CheckCircle2, ClipboardCheck, Calendar, Building2, User2 } from 'lucide-react';
+import { AlertCircle, TrendingUp, TrendingDown, Wallet, ShoppingBag, Bell, ReceiptText, Calculator, QrCode, CreditCard, Banknote, ArrowUpRight, ArrowDownRight, ArrowRight, Sparkles, Package, CheckCircle2, ClipboardCheck, Calendar, Building2, User2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db, auth } from '../lib/firebase';
 import { Transaction, OperationType, Debt, UserProfile } from '../types';
@@ -154,6 +154,75 @@ export default function Dashboard({ setActiveTab }: { setActiveTab: (tab: any) =
             </select>
          </div>
       </motion.div>
+
+      {/* Action Center - Urgent Notifications */}
+      {debts.filter(d => d.status === 'pending' && new Date(d.dueDate) <= new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)).length > 0 && (
+        <motion.div variants={itemVariants} className="space-y-6">
+          <div className="flex items-center gap-3 px-4">
+            <div className="w-2 h-2 bg-rose-500 rounded-full animate-ping" />
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Action Center: Tagihan Kritis</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {debts
+              .filter(d => d.status === 'pending' && new Date(d.dueDate) <= new Date(Date.now() + 3 * 24 * 60 * 60 * 1000))
+              .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+              .slice(0, 3)
+              .map(debt => {
+                const isOverdue = new Date(debt.dueDate) < new Date();
+                return (
+                  <div key={debt.id} className={cn(
+                    "p-6 rounded-[2rem] border-2 relative overflow-hidden group transition-all hover:scale-[1.02]",
+                    isOverdue ? "bg-rose-50 border-rose-100" : "bg-amber-50 border-amber-100"
+                  )}>
+                    <div className="relative z-10 flex flex-col h-full">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className={cn(
+                          "w-10 h-10 rounded-xl flex items-center justify-center",
+                          debt.type === 'payable' ? "bg-rose-500 text-white" : "bg-emerald-500 text-white"
+                        )}>
+                          {debt.type === 'payable' ? <TrendingDown className="w-5 h-5" /> : <TrendingUp className="w-5 h-5" />}
+                        </div>
+                        <span className={cn(
+                          "text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full",
+                          isOverdue ? "bg-rose-200 text-rose-700" : "bg-amber-200 text-amber-700"
+                        )}>
+                          {isOverdue ? 'Terlambat' : 'Segera'}
+                        </span>
+                      </div>
+                      <h4 className="text-base font-black text-slate-900 mb-1">{debt.contactName}</h4>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">
+                        {debt.type === 'payable' ? 'Utang Perusahaan' : 'Tagihan Piutang'}
+                      </p>
+                      <div className="mt-auto pt-4 border-t border-black/5 flex items-center justify-between">
+                        <div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Jatuh Tempo</p>
+                          <p className="text-xs font-black text-slate-900">{new Date(debt.dueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Nominal</p>
+                          <p className={cn("text-sm font-black font-mono", debt.type === 'payable' ? 'text-rose-600' : 'text-emerald-600')}>
+                            {formatCurrency(debt.remainingAmount)}
+                          </p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => setActiveTab('debts')}
+                        className="w-full mt-6 py-3 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-indigo-600 transition-all"
+                      >
+                        {debt.type === 'payable' ? 'Bayar Sekarang' : 'Tagih Pelanggan'} <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className={cn(
+                      "absolute -right-8 -bottom-8 w-24 h-24 rounded-full opacity-5 blur-2xl",
+                      debt.type === 'payable' ? "bg-rose-500" : "bg-emerald-500"
+                    )} />
+                  </div>
+                );
+              }
+            )}
+          </div>
+        </motion.div>
+      )}
 
       {/* Brand Header Section */}
       <motion.div variants={itemVariants} className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-white/40 backdrop-blur-xl p-10 md:p-14 rounded-[3.5rem] border-2 border-white shadow-2xl relative overflow-hidden">

@@ -101,8 +101,8 @@ export default function BalanceSheet() {
       startY: (doc as any).lastAutoTable.finalY + 15,
       head: [['KATEGORI PASIVA (LIABILITAS & EKUITAS)', 'NOMINAL (IDR)']],
       body: [
-        ['Hutang Usaha / Vendor', formatCurrency(totalAp)],
-        ['Hutang Lain-lain', '-'],
+        ['Utang Usaha / Vendor', formatCurrency(totalAp)],
+        ['Utang Lain-lain', '-'],
         ['Modal Disetor', formatCurrency(totalEquity * 0.7)],
         ['Laba Ditahan / Ekuitas Bersih', formatCurrency(totalEquity * 0.3)],
         [{ content: 'TOTAL PASIVA', styles: { fontStyle: 'bold', fillColor: [15, 23, 42], textColor: [255, 255, 255] } }, { content: formatCurrency(totalAp + totalEquity), styles: { fontStyle: 'bold', halign: 'right', fillColor: [15, 23, 42], textColor: [255, 255, 255] } }],
@@ -203,7 +203,7 @@ export default function BalanceSheet() {
 
            <div className="bg-slate-950 rounded-[4rem] shadow-2xl overflow-hidden p-10 md:p-16 space-y-14 text-white relative">
               <div className="space-y-10 relative z-10">
-                 <BalanceItem label="Hutang Usaha / Vendor" value={totalAp} type="liability" icon={ArrowDownRight} dark />
+                 <BalanceItem label="Utang Usaha / Vendor" value={totalAp} type="liability" icon={ArrowDownRight} dark />
                  <BalanceItem label="Ekuitas / Modal Bersih" value={totalEquity} type="equity" icon={Sparkles} dark />
               </div>
 

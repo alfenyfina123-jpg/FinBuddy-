@@ -53,7 +53,7 @@ export default function ProductManager() {
   };
 
   const deleteProduct = async (id: string) => {
-    if (!confirm('Hapus produk ini?')) return;
+    if (!window.confirm('Hapus produk ini?')) return;
     try {
       await deleteDoc(doc(db, 'products', id));
     } catch (error) {

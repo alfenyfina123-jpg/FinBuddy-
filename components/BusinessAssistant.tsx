@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, Send, User, Sparkles, MessageSquare, ArrowRight, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI } from "@google/genai";
+import { getGeminiResponse } from '../services/geminiService';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Transaction, Product } from '../types';
@@ -37,14 +37,6 @@ export default function BusinessAssistant() {
     setIsTyping(true);
 
     try {
-      // @ts-ignore - handled by build system or env
-      const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
-      
-      if (!apiKey || apiKey === 'undefined') {
-        throw new Error("Assistant AI FinBuddy membutuhkan API Key. Jika Anda menggunakan Vercel, pastikan sudah menambahkan GEMINI_API_KEY di Environment Variables.");
-      }
-      const ai = new GoogleGenAI({ apiKey });
-
       // Gather some context about the business
       let businessContext = '';
       if (auth.currentUser) {
@@ -75,25 +67,20 @@ export default function BusinessAssistant() {
         }
       }
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          { role: 'user', parts: [{ text: `
-            Anda adalah FinBuddy AI, asisten keuangan cerdas untuk bisnis UMKM.
-            Berikan saran profesional dan ringkas dalam Bahasa Indonesia.
-            Gunakan format Markdown jika diperlukan.
-            
-            ${businessContext}
-            
-            Chat History Sebelumnya:
-            ${messages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}
-            
-            User's Query: ${input}
-          ` }]}
-        ],
-      });
+      const prompt = `
+        Anda adalah FinBuddy AI, asisten keuangan cerdas untuk bisnis UMKM.
+        Berikan saran profesional dan ringkas dalam Bahasa Indonesia.
+        Gunakan format Markdown jika diperlukan.
+        
+        ${businessContext}
+        
+        Chat History Sebelumnya:
+        ${messages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}
+        
+        User's Query: ${input}
+      `;
 
-      const aiText = response.text || "Maaf, saya sedang mengalami kendala teknis.";
+      const aiText = await getGeminiResponse(prompt) || "Maaf, saya sedang mengalami kendala teknis.";
       setMessages(prev => [...prev, { role: 'assistant', content: aiText }]);
     } catch (error: any) {
       console.error("AI Error:", error);
