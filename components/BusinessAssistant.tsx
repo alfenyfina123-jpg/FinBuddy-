@@ -37,9 +37,11 @@ export default function BusinessAssistant() {
     setIsTyping(true);
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      // @ts-ignore - handled by build system or env
+      const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : '');
+      
       if (!apiKey || apiKey === 'undefined') {
-        throw new Error("API Key Gemini tidak ditemukan. Harap atur di Environment Variables.");
+        throw new Error("Assistant AI FinBuddy membutuhkan API Key. Jika Anda mendeploy sendiri ke Vercel, harap tambahkan GEMINI_API_KEY di Environment Variables.");
       }
       const ai = new GoogleGenAI({ apiKey });
 
