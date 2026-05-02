@@ -56,6 +56,77 @@ export default function GeneralJournal() {
     };
   }, [selectedMonth, selectedYear]);
 
+  const getDoubleEntries = (t: Transaction) => {
+    const entries = [];
+    const date = t.date;
+    const ref = t.id.slice(-6).toUpperCase();
+
+    if (t.type === 'income') {
+      // 1. Debit Cash (Asset +)
+      entries.push({
+        date,
+        ref,
+        account: 'Kas / Bank (Asset)',
+        description: t.description || t.category,
+        debit: t.amount,
+        credit: 0,
+        isCreditRow: false
+      });
+      // 2. Credit Revenue/Account (Equity + or Asset -)
+      let creditAccount = `Pendapatan: ${t.category}`;
+      if (t.category.toLowerCase().includes('piutang')) {
+        creditAccount = 'Piutang Usaha (Asset -)';
+      }
+      entries.push({
+        date,
+        ref,
+        account: creditAccount,
+        description: '', // Sub-description often empty for second line
+        debit: 0,
+        credit: t.amount,
+        isCreditRow: true
+      });
+    } else {
+      // 1. Debit Expense/Asset/Liability (Equity - or Asset + or Liability -)
+      let debitAccount = `Beban: ${t.category}`;
+      if (t.category.toLowerCase().includes('utang')) {
+        debitAccount = 'Utang Usaha (Liabilitas -)';
+      } else if (t.category.toLowerCase().includes('pajak')) {
+        debitAccount = 'Beban Pajak';
+      } else if (['peralatan', 'mesin', 'kendaraan', 'inventori', 'stok'].some(k => t.category.toLowerCase().includes(k))) {
+        debitAccount = `${t.category} (Asset +)`;
+      }
+
+      entries.push({
+        date,
+        ref,
+        account: debitAccount,
+        description: t.description || t.category,
+        debit: t.amount,
+        credit: 0,
+        isCreditRow: false
+      });
+      // 2. Credit Cash (Asset -)
+      entries.push({
+        date,
+        ref,
+        account: 'Kas / Bank (Asset -)',
+        description: '',
+        debit: 0,
+        credit: t.amount,
+        isCreditRow: true
+      });
+    }
+    return entries;
+  };
+
+  const filtered = transactions.filter(t => 
+    t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    t.category.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const allEntries = filtered.flatMap(t => getDoubleEntries(t));
+
   const downloadPDF = () => {
     const doc = new jsPDF();
     
@@ -69,7 +140,7 @@ export default function GeneralJournal() {
     doc.text(profile?.businessName?.toUpperCase() || auth.currentUser?.displayName?.toUpperCase() || 'FINBUDDY AI', 105, 18, { align: 'center' });
     
     doc.setFontSize(14);
-    doc.text('JURNAL UMUM', 105, 28, { align: 'center' });
+    doc.text('JURNAL UMUM (DOUBLE-ENTRY)', 105, 28, { align: 'center' });
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
@@ -77,17 +148,17 @@ export default function GeneralJournal() {
     doc.text(`Periode: ${periodValue}`, 105, 38, { align: 'center' });
     
     doc.setTextColor(150, 150, 150);
-    doc.text(`ID Entitas: ${auth.currentUser?.uid.substring(0, 12)}`, 14, 60); // Changed y coordinate from 65 to 60
+    doc.text(`ID Entitas: ${auth.currentUser?.uid.substring(0, 12)}`, 14, 60);
 
     autoTable(doc, {
-      startY: 75,
-      head: [['Post Date', 'Ref ID', 'Account / Description', 'Debit (DR)', 'Credit (CR)']],
-      body: transactions.map(t => [
-        t.date,
-        t.id.slice(-6).toUpperCase(),
-        `${t.category.toUpperCase()}\n    ${t.description}`,
-        t.type === 'income' ? formatCurrency(t.amount) : '-',
-        t.type === 'expense' ? formatCurrency(t.amount) : '-'
+      startY: 70,
+      head: [['Post Date', 'Ref', 'Account & Description', 'Debit (DR)', 'Credit (CR)']],
+      body: allEntries.map(e => [
+        e.date,
+        e.ref,
+        e.isCreditRow ? `      ${e.account}` : e.account + (e.description ? `\n      ${e.description}` : ''),
+        e.debit > 0 ? formatCurrency(e.debit) : '-',
+        e.credit > 0 ? formatCurrency(e.credit) : '-'
       ]),
       theme: 'grid',
       headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
@@ -98,25 +169,20 @@ export default function GeneralJournal() {
       },
     });
 
-    const totalIn = transactions.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
-    const totalOut = transactions.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
+    const totalIn = allEntries.reduce((a, b) => a + b.debit, 0);
+    const totalOut = allEntries.reduce((a, b) => a + b.credit, 0);
 
     const finalY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFillColor(248, 250, 252);
     doc.rect(14, finalY, 182, 10, 'F');
     doc.setTextColor(30, 41, 59);
     doc.setFont('helvetica', 'bold');
-    doc.text('GRAND TOTAL (TRIAL BALANCE)', 20, finalY + 6.5);
+    doc.text('BALANCE TOTAL', 20, finalY + 6.5);
     doc.text(formatCurrency(totalIn), 140, finalY + 6.5, { align: 'right' });
     doc.text(formatCurrency(totalOut), 190, finalY + 6.5, { align: 'right' });
 
     doc.save(`FinBuddy_Journal_${new Date().toISOString().split('T')[0]}.pdf`);
   };
-
-  const filtered = transactions.filter(t => 
-    t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    t.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   if (loading) return (
     <div className="p-20 text-center flex flex-col items-center gap-6">
@@ -208,68 +274,81 @@ export default function GeneralJournal() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100/50">
-              {filtered.map((t, idx) => (
+              {allEntries.map((e, idx) => (
                 <motion.tr 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: idx * 0.01 }}
-                  key={t.id} 
-                  className="group hover:bg-slate-50 transition-colors"
+                  transition={{ delay: idx * 0.005 }}
+                  key={`${e.ref}-${idx}`} 
+                  className={cn(
+                    "group hover:bg-slate-50 transition-colors",
+                    e.isCreditRow ? "bg-slate-50/30" : ""
+                  )}
                 >
-                  <td className="px-10 py-7">
-                    <div className="space-y-1">
-                       <p className="text-sm font-black text-slate-900 font-mono tracking-tighter">
-                         {new Date(t.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
-                       </p>
-                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
-                         {new Date(t.date).getFullYear()}
-                       </p>
-                    </div>
+                  <td className="px-10 py-5">
+                    {!e.isCreditRow && (
+                      <div className="space-y-1">
+                        <p className="text-sm font-black text-slate-900 font-mono tracking-tighter">
+                          {new Date(e.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+                          {new Date(e.date).getFullYear()}
+                        </p>
+                      </div>
+                    )}
                   </td>
-                  <td className="px-10 py-7">
-                    <div className="space-y-2">
+                  <td className="px-10 py-5">
+                    <div className="space-y-1">
                        <div className="flex items-center gap-3">
                           <span className={cn(
-                            "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest",
-                            t.type === 'income' ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"
-                          )}>{t.category}</span>
-                          <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest flex items-center gap-1">
-                             <Hash className="w-2.5 h-2.5" /> {t.id.substring(0, 8).toUpperCase()}
+                            "text-[13px] font-bold transition-colors",
+                            e.isCreditRow ? "pl-8 text-slate-500 italic" : "text-slate-900 group-hover:text-indigo-600"
+                          )}>
+                            {e.account}
                           </span>
+                          {!e.isCreditRow && (
+                            <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest flex items-center gap-1">
+                               <Hash className="w-2.5 h-2.5" /> {e.ref}
+                            </span>
+                          )}
                        </div>
-                       <p className="text-[13px] font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{t.description}</p>
+                       {!e.isCreditRow && e.description && (
+                         <p className="text-[10px] text-slate-400 pl-4 border-l-2 border-slate-100 italic">{e.description}</p>
+                       )}
                     </div>
                   </td>
-                  <td className="px-10 py-7 text-right">
-                    {t.type === 'income' ? (
-                       <span className="text-base font-black text-emerald-600 font-mono tracking-tighter">{formatCurrency(t.amount)}</span>
+                  <td className="px-10 py-5 text-right">
+                    {e.debit > 0 ? (
+                       <span className="text-sm font-black text-slate-900 font-mono tracking-tighter">{formatCurrency(e.debit)}</span>
                     ) : (
                        <span className="text-slate-200">—</span>
                     )}
                   </td>
-                  <td className="px-10 py-7 text-right">
-                    {t.type === 'expense' ? (
-                       <span className="text-base font-black text-rose-500 font-mono tracking-tighter">{formatCurrency(t.amount)}</span>
+                  <td className="px-10 py-5 text-right">
+                    {e.credit > 0 ? (
+                       <span className="text-sm font-black text-slate-900 font-mono tracking-tighter">{formatCurrency(e.credit)}</span>
                     ) : (
                        <span className="text-slate-200">—</span>
                     )}
                   </td>
-                  <td className="px-8 py-7 text-right">
-                     <button className="p-2 text-slate-200 hover:text-slate-400 transition-colors">
-                        <MoreHorizontal className="w-4 h-4" />
-                     </button>
+                  <td className="px-8 py-5 text-right">
+                     {!e.isCreditRow && (
+                       <button className="p-2 text-slate-200 hover:text-slate-400 transition-colors">
+                          <MoreHorizontal className="w-4 h-4" />
+                       </button>
+                     )}
                   </td>
                 </motion.tr>
               ))}
             </tbody>
             <tfoot>
                <tr className="bg-slate-50/50">
-                  <td colSpan={2} className="px-10 py-8 text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">Grand Summary (Total Recorded)</td>
+                  <td colSpan={2} className="px-10 py-8 text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">Grand Summary (Balanced Journal)</td>
                   <td className="px-10 py-8 text-right text-lg font-black text-slate-950 font-display tracking-tight">
-                     {formatCurrency(filtered.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0))}
+                     {formatCurrency(allEntries.reduce((a, b) => a + b.debit, 0))}
                   </td>
                   <td className="px-10 py-8 text-right text-lg font-black text-slate-950 font-display tracking-tight">
-                     {formatCurrency(filtered.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0))}
+                     {formatCurrency(allEntries.reduce((a, b) => a + b.credit, 0))}
                   </td>
                   <td></td>
                </tr>
