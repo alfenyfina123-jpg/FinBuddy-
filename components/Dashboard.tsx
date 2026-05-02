@@ -156,34 +156,35 @@ export default function Dashboard({ setActiveTab }: { setActiveTab: (tab: any) =
       </motion.div>
 
       {/* Brand Header Section */}
-      <motion.div variants={itemVariants} className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-white/40 backdrop-blur-xl p-10 md:p-14 rounded-[3.5rem] border border-white shadow-2xl relative overflow-hidden">
+      <motion.div variants={itemVariants} className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-white/40 backdrop-blur-xl p-10 md:p-14 rounded-[3.5rem] border-2 border-white shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-[80px] rounded-full -translate-y-20 translate-x-20" />
         <div className="relative z-10 flex-1">
           <div className="flex items-center gap-3 mb-6">
-            <span className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">Live Business Intelligence</span>
+            <div className="px-3 py-1 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-100">Live BI</div>
             {profile?.businessType && (
               <span className="px-3 py-1 bg-emerald-100 text-emerald-600 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">{profile.businessType}</span>
             )}
+            <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">{selectedYear}</span>
           </div>
-          <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tighter leading-[1.1] mb-6 font-display">
+          <h1 className="text-4xl md:text-7xl font-black text-slate-900 tracking-tighter leading-[1.05] mb-6 font-display">
             {profile?.businessName || 'Ikhtisar Bisnis'}
           </h1>
           <div className="flex flex-wrap gap-6 items-center">
-             <div className="flex items-center gap-2 text-slate-400">
-                <Building2 className="w-4 h-4" />
-                <p className="text-xs font-bold uppercase tracking-widest">{profile?.directorName || auth.currentUser?.displayName}</p>
+             <div className="flex items-center gap-2 bg-white/50 px-4 py-2 rounded-2xl border border-white">
+                <Building2 className="w-4 h-4 text-slate-400" />
+                <p className="text-xs font-black uppercase tracking-widest text-slate-600">{profile?.directorName || auth.currentUser?.displayName}</p>
              </div>
              {profile?.operationalDate && (
-               <div className="flex items-center gap-2 text-slate-400">
-                  <Calendar className="w-4 h-4" />
-                  <p className="text-xs font-bold uppercase tracking-widest">Sejak {new Date(profile.operationalDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+               <div className="flex items-center gap-2 bg-white/50 px-4 py-2 rounded-2xl border border-white">
+                  <Calendar className="w-4 h-4 text-indigo-400" />
+                  <p className="text-xs font-black uppercase tracking-widest text-indigo-600">Sejak {new Date(profile.operationalDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                </div>
              )}
           </div>
         </div>
         <button 
           onClick={() => setActiveTab('transactions')}
-          className="relative z-10 flex items-center justify-center gap-4 bg-slate-900 text-white px-10 py-5 rounded-3xl font-black uppercase tracking-widest text-[11px] hover:scale-[1.05] active:scale-[0.95] transition-all shadow-2xl shadow-indigo-200 group"
+          className="relative z-10 flex items-center justify-center gap-4 bg-slate-900 text-white px-10 py-6 rounded-[2.5rem] font-black uppercase tracking-widest text-[11px] hover:scale-[1.05] active:scale-[0.95] transition-all shadow-2xl shadow-indigo-200 group"
         >
           <ReceiptText className="w-6 h-6 text-indigo-400 group-hover:rotate-12 transition-transform" />
           Input Transaksi Baru

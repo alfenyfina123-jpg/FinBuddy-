@@ -13,8 +13,6 @@ interface Message {
   content: string;
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 export default function BusinessAssistant() {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: 'Halo! Saya asisten FinBuddy Anda. Apa yang bisa saya bantu untuk bisnis Anda hari ini?' }
@@ -39,6 +37,12 @@ export default function BusinessAssistant() {
     setIsTyping(true);
 
     try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === 'undefined') {
+        throw new Error("API Key Gemini tidak ditemukan. Harap atur di Environment Variables.");
+      }
+      const ai = new GoogleGenAI({ apiKey });
+
       // Gather some context about the business
       let businessContext = '';
       if (auth.currentUser) {
