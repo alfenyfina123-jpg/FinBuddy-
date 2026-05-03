@@ -15,7 +15,7 @@ interface Message {
 
 export default function BusinessAssistant() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Halo! Saya asisten FinBuddy Anda. Apa yang bisa saya bantu untuk bisnis Anda hari ini?' }
+    { role: 'assistant', content: 'Halo! Saya Konsultan Virtual FinBuddy. Ada yang bisa saya bantu untuk strategi bisnis Anda hari ini?' }
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -68,7 +68,7 @@ export default function BusinessAssistant() {
       }
 
       const prompt = `
-        Anda adalah FinBuddy AI, asisten keuangan cerdas untuk bisnis UMKM.
+        Anda adalah FinBuddy, sistem konsultan bisnis cerdas untuk UMKM.
         Berikan saran profesional dan ringkas dalam Bahasa Indonesia.
         Gunakan format Markdown jika diperlukan.
         
@@ -100,9 +100,9 @@ export default function BusinessAssistant() {
             <Bot className="w-7 h-7" />
           </div>
           <div>
-            <h3 className="text-xl font-black text-slate-900 tracking-tight font-display">Asisten Cerdas</h3>
+            <h3 className="text-xl font-black text-slate-900 tracking-tight font-display">Konsultan Virtual</h3>
             <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
-              <Zap className="w-3 h-3 fill-current" /> AI Assistant Online
+              <Zap className="w-3 h-3 fill-current" /> Sistem Konsultasi Aktif
             </p>
           </div>
         </div>

@@ -229,7 +229,7 @@ export default function Dashboard({ setActiveTab }: { setActiveTab: (tab: any) =
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-[80px] rounded-full -translate-y-20 translate-x-20" />
         <div className="relative z-10 flex-1">
           <div className="flex items-center gap-3 mb-6">
-            <div className="px-3 py-1 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-100">Live BI</div>
+            <div className="px-3 py-1 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-100">Analytics</div>
             {profile?.businessType && (
               <span className="px-3 py-1 bg-emerald-100 text-emerald-600 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">{profile.businessType}</span>
             )}
@@ -385,7 +385,7 @@ export default function Dashboard({ setActiveTab }: { setActiveTab: (tab: any) =
         </div>
       </motion.div>
 
-      {/* Intelligence Alert */}
+      {/* Business Performance Analysis */}
       <motion.div 
         variants={itemVariants}
         className={cn(
@@ -405,7 +405,7 @@ export default function Dashboard({ setActiveTab }: { setActiveTab: (tab: any) =
               "text-xl md:text-2xl lg:text-3xl font-black tracking-tighter font-display",
               netProfit >= 0 ? "text-emerald-950" : "text-rose-950"
             )}>
-              {netProfit >= 0 ? 'Analisis Strategis: Performa Positif' : 'Analisis Strategis: Peringatan Likuiditas'}
+              {netProfit >= 0 ? 'Analisis Performa Bisnis' : 'Analisis Performa Bisnis: Peringatan Likuiditas'}
             </h3>
           </div>
           <p className={cn(

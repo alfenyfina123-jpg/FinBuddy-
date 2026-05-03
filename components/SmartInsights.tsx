@@ -170,7 +170,7 @@ export default function SmartInsights({ setActiveTab }: SmartInsightsProps) {
             </div>
             <div>
               <h3 className="text-2xl font-black text-slate-900 tracking-tight font-display mb-2">Menganalisis Performa Bisnis Anda...</h3>
-              <p className="text-slate-500 font-medium">FinBuddy AI sedang memproses data transaksi dan stok untuk memberikan wawasan cerdas.</p>
+              <p className="text-slate-500 font-medium">Sistem sedang memproses data transaksi dan stok untuk memberikan wawasan strategis.</p>
             </div>
             <div className="flex gap-2">
               {[0, 1, 2].map(i => (

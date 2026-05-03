@@ -77,7 +77,7 @@ export default function GeneralLedger() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text(profile?.businessName?.toUpperCase() || auth.currentUser?.displayName?.toUpperCase() || 'FINBUDDY AI', 105, 18, { align: 'center' });
+    doc.text(profile?.businessName?.toUpperCase() || auth.currentUser?.displayName?.toUpperCase() || 'FINBUDDY', 105, 18, { align: 'center' });
     
     doc.setFontSize(14);
     doc.text(`BUKU BESAR: ${category.toUpperCase()}`, 105, 28, { align: 'center' });
