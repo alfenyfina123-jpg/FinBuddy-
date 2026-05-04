@@ -136,8 +136,8 @@ export default function App() {
     { id: 'inventory', label: 'Inventori Stok', icon: Package, group: 'Operasional', color: 'text-emerald-500', bg: 'bg-emerald-50' },
     { id: 'debts', label: 'Catatan Utang', icon: Wallet, group: 'Operasional', color: 'text-emerald-500', bg: 'bg-emerald-50' },
 
-    { id: 'aiAnalytics', label: 'Wawasan Bisnis', icon: Sparkles, group: 'Strategi & Konsultasi', color: 'text-violet-500', bg: 'bg-violet-50' },
-    { id: 'aiAssistant', label: 'Konsultan Virtual', icon: Bot, group: 'Strategi & Konsultasi', color: 'text-violet-500', bg: 'bg-violet-50' },
+    { id: 'aiAnalytics', label: 'Analitik Cerdas', icon: Sparkles, group: 'Kecerdasan Buatan (AI)', color: 'text-violet-500', bg: 'bg-violet-50' },
+    { id: 'aiAssistant', label: 'Asisten Bisnis', icon: Bot, group: 'Kecerdasan Buatan (AI)', color: 'text-violet-500', bg: 'bg-violet-50' },
 
     { id: 'settings', label: 'Pengaturan', icon: UserIcon, group: 'Sistem', color: 'text-slate-500', bg: 'bg-slate-50' },
   ];
@@ -147,7 +147,7 @@ export default function App() {
     'Operasional': { color: 'text-emerald-400', iconColor: 'text-emerald-500' },
     'Laporan Keuangan': { color: 'text-rose-400', iconColor: 'text-rose-500' },
     'Analitik': { color: 'text-amber-400', iconColor: 'text-amber-500' },
-    'Strategi & Konsultasi': { color: 'text-violet-400', iconColor: 'text-violet-500' },
+    'Kecerdasan Buatan (AI)': { color: 'text-violet-400', iconColor: 'text-violet-500' },
     'Sistem': { color: 'text-slate-400', iconColor: 'text-slate-500' },
   };
 

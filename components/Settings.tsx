@@ -163,6 +163,53 @@ export default function Settings() {
            </div>
 
            <div className="p-8 md:p-10 bg-white/60 backdrop-blur-md rounded-[2.5rem] border border-white shadow-xl space-y-8">
+              <div className="flex items-center gap-3 mb-2">
+                 <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600">
+                    <SettingsIcon className="w-5 h-5" />
+                 </div>
+                 <h3 className="text-xl font-black text-slate-900 tracking-tight font-display">Konfigurasi Perpajakan</h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                 <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                    <div>
+                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Persetase PPh Final UMKM (%)</label>
+                       <div className="relative">
+                          <input 
+                            type="number" 
+                            step="0.1"
+                            placeholder="default: 0.5"
+                            className="w-full px-6 py-4 bg-white border-2 border-slate-100 focus:border-indigo-100 rounded-2xl outline-none transition-all font-black text-lg"
+                            value={profile.pphRate ?? 0.5}
+                            onChange={(e) => setProfile({ ...profile, pphRate: parseFloat(e.target.value) })}
+                          />
+                          <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-slate-300">%</span>
+                       </div>
+                    </div>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">Persentase pajak final berdasarkan PP 55 Tahun 2022 (Standar 0.5%).</p>
+                 </div>
+
+                 <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                    <div>
+                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Persentase PPN (%)</label>
+                       <div className="relative">
+                          <input 
+                            type="number" 
+                            step="1"
+                            placeholder="default: 11"
+                            className="w-full px-6 py-4 bg-white border-2 border-slate-100 focus:border-indigo-100 rounded-2xl outline-none transition-all font-black text-lg"
+                            value={profile.ppnRate ?? 11}
+                            onChange={(e) => setProfile({ ...profile, ppnRate: parseFloat(e.target.value) })}
+                          />
+                          <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-slate-300">%</span>
+                       </div>
+                    </div>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">Nilai Pajak Pertambahan Nilai yang berlaku (Standar 11%).</p>
+                 </div>
+              </div>
+           </div>
+
+           <div className="p-8 md:p-10 bg-white/60 backdrop-blur-md rounded-[2.5rem] border border-white shadow-xl space-y-8">
               <div className="flex items-center gap-3">
                  <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
                     <Database className="w-5 h-5" />

@@ -25,6 +25,8 @@ export interface UserProfile {
   directorName?: string;
   address?: string;
   npwp?: string;
+  pphRate?: number; // e.g., 0.5 for 0.5%
+  ppnRate?: number; // e.g., 11 for 11%
   qrisPayload?: string;
   operationalDate?: string; // yyyy-mm-dd
   autoGeneratePdfLedger?: boolean;
