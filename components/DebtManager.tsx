@@ -3,11 +3,12 @@ import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, serverTim
 import { Wallet, Plus, Search, Calendar, User as UserIcon, ArrowRight, Trash2, CheckCircle2, AlertCircle, Clock, ChevronRight, X, DollarSign, Calculator, Info, Check, ShieldCheck, Sparkles, TrendingUp, TrendingDown, Send, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, auth } from '../lib/firebase';
-import { Debt, OperationType } from '../types';
+import { Debt, OperationType, UserProfile } from '../types';
 import { formatCurrency, handleFirestoreError, cn } from '../lib/utils';
 
 export default function DebtManager() {
   const [debts, setDebts] = useState<Debt[]>([]);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,12 +24,23 @@ export default function DebtManager() {
 
   useEffect(() => {
     if (!auth.currentUser) return;
+    
+    // Fetch Debts
     const q = query(collection(db, 'debts'), where('userId', '==', auth.currentUser.uid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setDebts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Debt)));
       setLoading(false);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'debts'));
-    return () => unsubscribe();
+
+    // Fetch Profile for QRIS
+    const profileUnsub = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
+      if (snap.exists()) setProfile(snap.data() as UserProfile);
+    });
+
+    return () => {
+      unsubscribe();
+      profileUnsub();
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -274,11 +286,14 @@ export default function DebtManager() {
                                 {d.type === 'receivable' && (
                                   <button 
                                     onClick={() => {
-                                      const message = `Halo ${d.contactName}, ini pengingat dari Bisnis Saya untuk tagihan sebesar ${formatCurrency(d.remainingAmount)} yang jatuh tempo pada ${new Date(d.dueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}. Mohon bantuannya untuk segera dilakukan pelunasan. Terima kasih!`;
+                                      const qrisSection = profile?.qrisPayload 
+                                        ? `\n\nPembayaran dapat dilakukan melalui QRIS berikut:\nhttps://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(profile.qrisPayload)}&size=400x400`
+                                        : '';
+                                      const message = `Halo ${d.contactName}, ini pengingat dari ${profile?.businessName || 'Bisnis Kami'} untuk tagihan sebesar ${formatCurrency(d.remainingAmount)} yang jatuh tempo pada ${new Date(d.dueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}. Mohon bantuannya untuk segera dilakukan pelunasan.${qrisSection}\n\nTerima kasih!`;
                                       window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
                                     }}
                                     className="p-2.5 text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all"
-                                    title="Kirim WhatsApp"
+                                    title="Kirim WhatsApp + QRIS"
                                   >
                                     <MessageSquare className="w-4.5 h-4.5" />
                                   </button>
